@@ -118,7 +118,7 @@ func doConfigureWithBuсketPath(t *testing.T, bucketPath string, expectedServer 
 		t.Errorf("upload: did not create an uploader")
 	}
 	if tu.StorageClass != "STANDARD" {
-		t.Errorf("upload: TarUploader field 'StorageClass' expected %s but got %s", "STANDARD", tu.StorageClass)
+		t.Errorf("upload: S3TarUploader field 'StorageClass' expected %s but got %s", "STANDARD", tu.StorageClass)
 	}
 	if err != nil {
 		t.Errorf("upload: expected error to be '<nil>' but got %s", err)
@@ -134,14 +134,14 @@ func doConfigureWithBuсketPath(t *testing.T, bucketPath string, expectedServer 
 		t.Log(err)
 	}
 	if tu.StorageClass != "STANDARD_IA" {
-		t.Errorf("upload: TarUploader field 'StorageClass' expected %s but got %s", "STANDARD_IA", tu.StorageClass)
+		t.Errorf("upload: S3TarUploader field 'StorageClass' expected %s but got %s", "STANDARD_IA", tu.StorageClass)
 	}
 }
 
 func TestValidUploader(t *testing.T) {
 	mockSvc := &mockS3Client{}
 
-	tu := walg.NewTarUploader(mockSvc, "bucket", "server", "region")
+	tu := walg.NewS3TarUploader(mockSvc, "bucket", "server", "region")
 	if tu == nil {
 		t.Errorf("upload: Did not create a new tar uploader")
 	}
@@ -159,7 +159,7 @@ func TestUploadError(t *testing.T) {
 		err: true,
 	}
 
-	tu := walg.NewTarUploader(mockClient, "bucket", "server", "region")
+	tu := walg.NewS3TarUploader(mockClient, "bucket", "server", "region")
 	tu.Upl = mockUploader
 
 	maker := &walg.S3TarBallMaker{
@@ -172,7 +172,7 @@ func TestUploadError(t *testing.T) {
 	tarBall := maker.Make(true)
 	tarBall.SetUp(walg.MockArmedCrypter())
 
-	tarBall.Finish(&walg.S3TarBallSentinelDto{})
+	tarBall.Finish(&walg.TarBallSentinelDto{})
 	if tu.Success {
 		t.Errorf("upload: expected to fail to upload successfully")
 	}
@@ -183,7 +183,7 @@ func TestUploadError(t *testing.T) {
 
 	tarBall = maker.Make(true)
 	tarBall.SetUp(walg.MockArmedCrypter())
-	tarBall.Finish(&walg.S3TarBallSentinelDto{})
+	tarBall.Finish(&walg.TarBallSentinelDto{})
 	if tu.Success {
 		t.Errorf("upload: expected to fail to upload successfully")
 	}

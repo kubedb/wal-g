@@ -112,7 +112,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	err = bundle.Tb.Finish(&walg.S3TarBallSentinelDto{})
+	err = bundle.Tb.Finish(&walg.TarBallSentinelDto{})
 	if err != nil {
 		panic(err)
 	}

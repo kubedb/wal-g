@@ -7,6 +7,8 @@ import (
 	"log"
 	"os"
 	"runtime/pprof"
+
+	_ "github.com/wal-g/wal-g/s3"
 )
 
 var profile bool
@@ -116,32 +118,42 @@ func main() {
 		defer pprof.StopCPUProfile()
 	}
 
-	// Configure and start S3 session with bucket, region, and path names.
-	// Checks that environment variables are properly set.
-	tu, pre, err := walg.Configure()
-	if err != nil {
-		log.Fatalf("FATAL: %+v\n", err)
+	waleCloudProvider := os.Getenv("WALE_CLOUD_PROVIDER")
+	if waleCloudProvider == "" {
+		log.Fatal(`Flag "WALE_CLOUD_PROVIDER" missing`)
 	}
 
-	fmt.Println("BUCKET:", *pre.Bucket)
-	fmt.Println("SERVER:", *pre.Server)
+	operator, err := walg.NewOperator(waleCloudProvider)
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	cloud, err := operator.GetCloud()
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	tu, err := operator.GetTarUploader()
+	if err != nil {
+		log.Fatal(err)
+	}
 
 	if command == "wal-fetch" {
 		// Fetch and decompress a WAL file from S3.
-		walg.HandleWALFetch(pre, firstArgument, backupName, true)
+		walg.HandleWALFetch(cloud, firstArgument, backupName, true)
 	} else if command == "wal-prefetch" {
-		walg.HandleWALPrefetch(pre, firstArgument, backupName)
+		walg.HandleWALPrefetch(cloud, firstArgument, backupName)
 	} else if command == "wal-push" {
 		// Upload a WAL file to S3.
-		walg.HandleWALPush(tu, firstArgument, pre, verify)
+		walg.HandleWALPush(tu, firstArgument, cloud, verify)
 	} else if command == "backup-push" {
-		walg.HandleBackupPush(firstArgument, tu, pre)
+		walg.HandleBackupPush(firstArgument, tu, cloud)
 	} else if command == "backup-fetch" {
-		walg.HandleBackupFetch(backupName, pre, firstArgument, mem)
+		walg.HandleBackupFetch(backupName, cloud, firstArgument, mem)
 	} else if command == "backup-list" {
-		walg.HandleBackupList(pre)
+		walg.HandleBackupList(cloud)
 	} else if command == "delete" {
-		walg.HandleDelete(pre, all)
+		walg.HandleDelete(cloud, all)
 	} else {
 		l.Fatalf("Command '%s' is unsupported by WAL-G.", command)
 	}

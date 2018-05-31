@@ -13,7 +13,7 @@ import (
 )
 
 // HandleWALPrefetch is invoked by wal-fetch command to speed up database restoration
-func HandleWALPrefetch(pre *Prefix, walFileName string, location string) {
+func HandleWALPrefetch(cloud Cloud, walFileName string, location string) {
 	var fileName = walFileName
 	var err error
 	location = path.Dir(location)
@@ -24,7 +24,7 @@ func HandleWALPrefetch(pre *Prefix, walFileName string, location string) {
 			log.Println("WAL-prefetch failed: ", err, " file: ", fileName)
 		}
 		wg.Add(1)
-		go prefetchFile(location, pre, fileName, wg)
+		go prefetchFile(location, cloud, fileName, wg)
 		time.Sleep(10 * time.Millisecond) // ramp up in order
 	}
 
@@ -33,7 +33,7 @@ func HandleWALPrefetch(pre *Prefix, walFileName string, location string) {
 	wg.Wait()
 }
 
-func prefetchFile(location string, pre *Prefix, walFileName string, wg *sync.WaitGroup) {
+func prefetchFile(location string, cloud Cloud, walFileName string, wg *sync.WaitGroup) {
 	defer func() {
 		if r := recover(); r != nil {
 			fmt.Println("Prefetch unsuccessful ", walFileName, r)
@@ -53,7 +53,7 @@ func prefetchFile(location string, pre *Prefix, walFileName string, wg *sync.Wai
 	log.Println("WAL-prefetch file: ", walFileName)
 	os.MkdirAll(runningLocation, 0755)
 
-	DownloadWALFile(pre, walFileName, oldPath)
+	DownloadWALFile(cloud, walFileName, oldPath)
 
 	_, errO = os.Stat(oldPath)
 	_, errN = os.Stat(newPath)

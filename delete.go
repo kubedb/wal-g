@@ -2,11 +2,9 @@ package walg
 
 import (
 	"github.com/aws/aws-sdk-go/aws"
-	"github.com/aws/aws-sdk-go/service/s3"
 	"log"
 	"strconv"
 	"time"
-	"strings"
 )
 
 // DeleteCommandArguments incapsulates arguments for delete command
@@ -81,8 +79,8 @@ func ParseDeleteArguments(args []string, fallBackFunc func()) (result DeleteComm
 	return
 }
 
-func deleteBeforeTarget(target string, bk *Backup, pre *Prefix, findFull bool, backups []BackupTime, dryRun bool) {
-	dto := fetchSentinel(target, bk, pre)
+func deleteBeforeTarget(target string, bk *Backup, cloud Cloud, findFull bool, backups []BackupTime, dryRun bool) {
+	dto := FetchSentinel(target, bk, cloud)
 	if dto.IsIncremental() {
 		if findFull {
 			target = *dto.IncrementFullName
@@ -114,79 +112,30 @@ func deleteBeforeTarget(target string, bk *Backup, pre *Prefix, findFull bool, b
 
 	if !dryRun {
 		if skipLine < len(backups)-1 {
-			deleteWALBefore(backups[skipLine], pre)
-			deleteBackupsBefore(backups, skipLine, pre)
+			deleteWALBefore(backups[skipLine], cloud)
+			deleteBackupsBefore(backups, skipLine, cloud)
 		}
 	} else {
 		log.Printf("Dry run finished.\n")
 	}
 }
 
-func deleteBackupsBefore(backups []BackupTime, skipline int, pre *Prefix) {
+func deleteBackupsBefore(backups []BackupTime, skipline int, cloud Cloud) {
 	for i, b := range backups {
+		name := b.Name
 		if i > skipline {
-			dropBackup(pre, b)
+			cloud.DropBackup(&name)
 		}
 	}
 }
 
-func dropBackup(pre *Prefix, b BackupTime) {
+func deleteWALBefore(bt BackupTime, cloud Cloud) {
+	server := cloud.GetServer()
 	var bk = &Backup{
-		Prefix: pre,
-		Path:   GetBackupPath(pre),
-		Name:   aws.String(b.Name),
+		Prefix: cloud,
+		Path:   aws.String(SanitizePath(*server + "/wal_005/")),
 	}
-	tarFiles, err := bk.GetKeys()
-	if err != nil {
-		log.Fatal("Unable to list backup for deletion ", b.Name, err)
-	}
-
-	folderKey := strings.TrimPrefix(*pre.Server+"/basebackups_005/"+b.Name, "/")
-	suffixKey := folderKey + SentinelSuffix
-
-	keys := append(tarFiles, suffixKey, folderKey)
-	parts := partition(keys, 1000)
-	for _, part := range parts {
-
-		input := &s3.DeleteObjectsInput{Bucket: pre.Bucket, Delete: &s3.Delete{
-			Objects: partitionToObjects(part),
-		}}
-		_, err = pre.Svc.DeleteObjects(input)
-		if err != nil {
-			log.Fatal("Unable to delete backup ", b.Name, err)
-		}
-
-	}
-}
-
-func partitionToObjects(keys []string) []*s3.ObjectIdentifier {
-	objs := make([]*s3.ObjectIdentifier, len(keys))
-	for i, k := range keys {
-		objs[i] = &s3.ObjectIdentifier{Key: aws.String(k)}
-	}
-	return objs
-}
-
-func deleteWALBefore(bt BackupTime, pre *Prefix) {
-	var bk = &Backup{
-		Prefix: pre,
-		Path:   aws.String(sanitizePath(*pre.Server + "/wal_005/")),
-	}
-
-	objects, err := bk.GetWals(bt.WalFileName)
-	if err != nil {
-		log.Fatal("Unable to obtaind WALS for border ", bt.Name, err)
-	}
-	parts := partitionObjects(objects, 1000)
-	for _, part := range parts {
-		input := &s3.DeleteObjectsInput{Bucket: pre.Bucket, Delete: &s3.Delete{
-			Objects: part,
-		}}
-		_, err = pre.Svc.DeleteObjects(input)
-		if err != nil {
-			log.Fatal("Unable to delete WALS before ", bt.Name, err)
-		}
-	}
+	cloud.DeleteWALBefore(bt, bk)
 }
 
 // DeleteUsage is a text message explaining how to use delete

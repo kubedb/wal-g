@@ -3,7 +3,7 @@ package walg
 import (
 	"crypto/md5"
 	"encoding/hex"
-	"github.com/aws/aws-sdk-go/service/s3"
+	"encoding/json"
 	"hash"
 	"io"
 	"log"
@@ -11,7 +11,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"time"
-	"encoding/json"
 )
 
 // BackupTime is used to sort backups by
@@ -38,21 +37,8 @@ func (p TimeSlice) Swap(i, j int) {
 	p[i], p[j] = p[j], p[i]
 }
 
-func partition(a []string, b int) [][]string {
+func Partition(a []string, b int) [][]string {
 	c := make([][]string, 0)
-	for i := 0; i < len(a); i += b {
-		if i+b > len(a) {
-			c = append(c, a[i:])
-		} else {
-			c = append(c, a[i:i+b])
-		}
-	}
-	return c
-}
-
-func partitionObjects(a []*s3.ObjectIdentifier, b int) [][]*s3.ObjectIdentifier {
-	// I've unsuccessfully tried this with interface{} but there was too much of casting
-	c := make([][]*s3.ObjectIdentifier, 0)
 	for i := 0; i < len(a); i += b {
 		if i+b > len(a) {
 			c = append(c, a[i:])
@@ -78,7 +64,7 @@ func getMaxDownloadConcurrency(default_value int) int {
 	return getMaxConcurrency("WALG_DOWNLOAD_CONCURRENCY", default_value)
 }
 
-func getMaxUploadConcurrency(default_value int) int {
+func GetMaxUploadConcurrency(default_value int) int {
 	return getMaxConcurrency("WALG_UPLOAD_CONCURRENCY", default_value)
 }
 
@@ -127,16 +113,16 @@ func getMaxConcurrency(key string, default_value int) int {
 	return max(con, 1)
 }
 
-type md5Reader struct {
+type Md5Reader struct {
 	internal io.Reader
 	md5      hash.Hash
 }
 
-func newMd5Reader(reader io.Reader) *md5Reader {
-	return &md5Reader{internal: reader, md5: md5.New()}
+func NewMd5Reader(reader io.Reader) *Md5Reader {
+	return &Md5Reader{internal: reader, md5: md5.New()}
 }
 
-func (r *md5Reader) Read(p []byte) (n int, err error) {
+func (r *Md5Reader) Read(p []byte) (n int, err error) {
 	n, err = r.internal.Read(p)
 	if err != nil {
 		return
@@ -145,7 +131,7 @@ func (r *md5Reader) Read(p []byte) (n int, err error) {
 	return
 }
 
-func (r *md5Reader) Sum() string {
+func (r *Md5Reader) Sum() string {
 	bytes := r.md5.Sum(nil)
 	return hex.EncodeToString(bytes)
 }

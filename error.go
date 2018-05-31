@@ -19,12 +19,12 @@ func (e Lz4Error) Error() string {
 // UnsetEnvVarError is used to indicate required environment
 // variables for WAL-G.
 type UnsetEnvVarError struct {
-	names []string
+	Names []string
 }
 
 func (e UnsetEnvVarError) Error() string {
 	msg := "Did not set the following environment variables:\n"
-	for _, v := range e.names {
+	for _, v := range e.Names {
 		msg = msg + v + "\n"
 	}
 

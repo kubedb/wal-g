@@ -20,7 +20,7 @@ type TarInterpreter interface {
 // FileTarInterpreter extracts input to disk.
 type FileTarInterpreter struct {
 	NewDir             string
-	Sentinel           S3TarBallSentinelDto
+	Sentinel           TarBallSentinelDto
 	IncrementalBaseDir string
 }
 

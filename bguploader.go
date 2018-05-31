@@ -29,19 +29,19 @@ type BgUploader struct {
 	started map[string]interface{}
 
 	// uploading structure
-	tu *TarUploader
+	tu TarUploaderInterface
 
 	// to control amount of work done in one cycle of archive_comand
 	totalUploaded int32
 
 	mutex sync.Mutex
 
-	pre    *Prefix
+	pre    Cloud
 	verify bool
 }
 
 // Start up checking what's inside archive_status
-func (u *BgUploader) Start(walFilePath string, maxParallelWorkers int32, tu *TarUploader, pre *Prefix, verify bool) {
+func (u *BgUploader) Start(walFilePath string, maxParallelWorkers int32, tu TarUploaderInterface, cloud Cloud, verify bool) {
 	if maxParallelWorkers < 1 {
 		return // Nothing to start
 	}
@@ -51,7 +51,7 @@ func (u *BgUploader) Start(walFilePath string, maxParallelWorkers int32, tu *Tar
 	u.dir = filepath.Dir(walFilePath)
 	u.started = make(map[string]interface{})
 	u.started[filepath.Base(walFilePath)+readySuffix] = walFilePath
-	u.pre = pre
+	u.pre = cloud
 	u.verify = verify
 
 	// This goroutine will spawn new if necessary
@@ -116,7 +116,11 @@ func haveNoSlots(u *BgUploader) bool {
 // Upload one WAL file
 func (u *BgUploader) Upload(info os.FileInfo) {
 	walfilename := strings.TrimSuffix(info.Name(), readySuffix)
-	UploadWALFile(u.tu.Clone(), filepath.Join(u.dir, walfilename), u.pre, u.verify)
+	// TODO: Shahriar.  Fix this. TarUploader should be clone. Following is the original
+	// UploadWALFile(u.tu.Clone(), filepath.Join(u.dir, walfilename), u.pre, u.verify)
+	// I have used value receiver instead of Clone.
+	// Fix this
+	UploadWALFile(u.tu, filepath.Join(u.dir, walfilename), u.pre, u.verify)
 
 	ready := filepath.Join(u.dir, archiveStatus, info.Name())
 	done := filepath.Join(u.dir, archiveStatus, walfilename+done)

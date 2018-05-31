@@ -224,6 +224,6 @@ func SetupBench() {
 		fmt.Println(err);
 	}
 }
-func Backup(tu *walg.TarUploader, pre *walg.Prefix) {
+func Backup(tu *walg.S3TarUploader, pre *walg.Prefix) {
 	walg.HandleBackupPush(baseDir, tu, pre)
 }

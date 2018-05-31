@@ -20,7 +20,7 @@ func TestS3TarBall(t *testing.T) {
 		BaseDir:  "tmp",
 		Trim:     "/usr/local",
 		BkupName: "test",
-		Tu:       walg.NewTarUploader(&mockS3Client{}, "bucket", "server", "region"),
+		Tu:       walg.NewS3TarUploader(&mockS3Client{}, "bucket", "server", "region"),
 	}
 
 	bundle.NewTarBall(false)
@@ -83,7 +83,7 @@ func TestS3DependentFunctions(t *testing.T) {
 		MinSize: 100,
 	}
 
-	tu := walg.NewTarUploader(&mockS3Client{}, "bucket", "server", "region")
+	tu := walg.NewS3TarUploader(&mockS3Client{}, "bucket", "server", "region")
 	tu.Upl = &mockS3Uploader{}
 
 	bundle.Tbm = &walg.S3TarBallMaker{
@@ -124,7 +124,7 @@ func TestS3DependentFunctions(t *testing.T) {
 		t.Errorf("structs: expected WriteAfterClose error but got '<nil>'")
 	}
 
-	err = tarBall.Finish(&walg.S3TarBallSentinelDto{})
+	err = tarBall.Finish(&walg.TarBallSentinelDto{})
 	if err != nil {
 		t.Errorf("structs: tarball did not finish correctly with error %s", err)
 	}
@@ -134,7 +134,7 @@ func TestS3DependentFunctions(t *testing.T) {
 	tarBall = bundle.Tb
 	tarBall.SetUp(walg.MockArmedCrypter(), "mockTarball")
 	tarBall.CloseTar()
-	err = tarBall.Finish(&walg.S3TarBallSentinelDto{})
+	err = tarBall.Finish(&walg.TarBallSentinelDto{})
 	if err != nil {
 		t.Errorf("structs: tarball did not finish correctly with error %s", err)
 	}
@@ -147,7 +147,7 @@ func TestEmptyBundleQueue(t *testing.T) {
 		MinSize: 100,
 	}
 
-	tu := walg.NewTarUploader(&mockS3Client{}, "bucket", "server", "region")
+	tu := walg.NewS3TarUploader(&mockS3Client{}, "bucket", "server", "region")
 	tu.Upl = &mockS3Uploader{}
 
 	bundle.Tbm = &walg.S3TarBallMaker{
@@ -193,7 +193,7 @@ func queueTest(t *testing.T) {
 	bundle := &walg.Bundle{
 		MinSize: 100,
 	}
-	tu := walg.NewTarUploader(&mockS3Client{}, "bucket", "server", "region")
+	tu := walg.NewS3TarUploader(&mockS3Client{}, "bucket", "server", "region")
 	tu.Upl = &mockS3Uploader{}
 	bundle.Tbm = &walg.S3TarBallMaker{
 		BaseDir:  "mockDirectory",
