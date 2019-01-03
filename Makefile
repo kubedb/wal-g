@@ -75,3 +75,19 @@ unlink_brotli:
 	rm -rf vendor/github.com/google/brotli/*
 	mv tmp/* vendor/github.com/google/brotli/
 	rm -rf tmp/
+
+alpine: $(CMD_FILES) $(PKG_FILES)
+	rm -rf .brotli.tmp
+	rm -rf ./vendor/github.com/google/brotli/dist
+	docker build --pull -t wal-g/golang:1.11-alpine ./docker/go-alpine
+	docker run                              \
+	    --rm                                \
+	    -u $$(id -u):$$(id -g)              \
+	    -v /tmp:/.cache                     \
+	    -v /tmp:/go/src/github.com/golang   \
+	    -v "$$(pwd):/go/src/$(PKG)"         \
+	    -w /go/src/$(PKG)                   \
+	    -e GOOS=linux                       \
+	    -e GOARCH=amd64                     \
+	    wal-g/golang:1.11-alpine            \
+	    /bin/bash -c "make install && make deps && make pg_build"
