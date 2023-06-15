@@ -53,11 +53,11 @@ type oplogReplayRunArgs struct {
 
 func buildOplogReplayRunArgs(cmdargs []string) (args oplogReplayRunArgs, err error) {
 	// resolve archiving settings
-	args.since, err = models.TimestampFromStr(cmdargs[0])
+	args.since, err = models.TimestampFromTime(cmdargs[0])
 	if err != nil {
 		return
 	}
-	args.until, err = models.TimestampFromStr(cmdargs[1])
+	args.until, err = models.TimestampFromTime(cmdargs[1])
 	if err != nil {
 		return
 	}
@@ -126,6 +126,10 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 	if err != nil {
 		return err
 	}
+
+	// update since and until. since = matched archive start ts , until = matched archiver end ts
+	replayArgs.since, replayArgs.until = archive.GetUpdatedBackupTimes(archives, replayArgs.since, replayArgs.until)
+	dbApplier.SetUntilTime(replayArgs.until)
 	path, err := archive.SequenceBetweenTS(archives, replayArgs.since, replayArgs.until)
 	if err != nil {
 		return err
