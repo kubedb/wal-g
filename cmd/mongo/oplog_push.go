@@ -177,6 +177,9 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 	}
 
 	args.lwUpdate, err = internal.GetDurationSetting(internal.MongoDBLastWriteUpdateInterval)
+	if err != nil {
+		return
+	}
 
 	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
 	if err != nil {

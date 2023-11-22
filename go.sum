@@ -1498,8 +1498,8 @@ k8s.io/utils v0.0.0-20210722164352-7f3ee0f31471/go.mod h1:jPW/WVKK9YHAvNhRxK0md/
 k8s.io/utils v0.0.0-20210820185131-d34e5cb4466e/go.mod h1:jPW/WVKK9YHAvNhRxK0md/EJ228hCsBRufyofKtW8HA=
 k8s.io/utils v0.0.0-20230406110748-d93618cff8a2 h1:qY1Ad8PODbnymg2pRbkyMT/ylpTrCM8P2RJ0yroCyIk=
 k8s.io/utils v0.0.0-20230406110748-d93618cff8a2/go.mod h1:OLgZIPagt7ERELqWJFomSt595RzquPNLL48iOWgYOg0=
-kmodules.xyz/client-go v0.25.40 h1:za/YLZRUFWHWfF/EYo3Hz9QFED5Mr/ptRumHb/bqxEI=
-kmodules.xyz/client-go v0.25.40/go.mod h1:ijkpW+0nkrKf8zpK7V/UQQzjWMZpnMX887jfYLHBMIM=
+kmodules.xyz/client-go v0.25.41 h1:Rz5voKorcyB4okhP0pymeVMOcCF2tXHN9IZG62r2Fkk=
+kmodules.xyz/client-go v0.25.41/go.mod h1:bUfkYVd0Z7NKY87y87JZKYHxP0qk17FQD5zQazNrklQ=
 kmodules.xyz/custom-resources v0.25.2 h1:+PJgUZvbbSgyNT7EX9gUZ3PIzY2LAW03TDW8cevvXqo=
 kmodules.xyz/custom-resources v0.25.2/go.mod h1:b9XjjKQMZ6KrLHXKqQz7YwV3M3BK8Hwi4KEwu5RadCo=
 kmodules.xyz/monitoring-agent-api v0.25.5 h1:7ULBfJkRy+ROJuNclB2IzFHqesblFihtVo9How0/2LM=

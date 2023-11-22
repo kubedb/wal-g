@@ -68,7 +68,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.25.3
 	k8s.io/client-go v0.25.3
-	kmodules.xyz/client-go v0.25.40
+	kmodules.xyz/client-go v0.25.41
 	kubedb.dev/apimachinery v0.37.1-0.20231121085114-0a987940309d
 	kubestash.dev/apimachinery v0.2.0-rc.0.0.20231114115833-0b99d5ce666e
 	sigs.k8s.io/controller-runtime v0.13.1

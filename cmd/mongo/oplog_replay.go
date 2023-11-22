@@ -64,6 +64,9 @@ func buildOplogReplayRunArgs(cmdargs []string) (args oplogReplayRunArgs, err err
 		return
 	}
 	args.until, err = processArg(cmdargs[1], downloader)
+	if err != nil {
+		return
+	}
 	args.since, err = models.TimestampFromTime(cmdargs[0])
 	if err != nil {
 		return
