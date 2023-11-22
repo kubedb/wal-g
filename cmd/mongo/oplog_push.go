@@ -19,6 +19,15 @@ import (
 	"github.com/wal-g/wal-g/internal/databases/mongo/stats"
 	"github.com/wal-g/wal-g/internal/webserver"
 	"github.com/wal-g/wal-g/utility"
+	"k8s.io/client-go/tools/clientcmd"
+	"kubedb.dev/apimachinery/pkg/factory"
+	controllerclient "sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+var (
+	snapshotName      string
+	snapshotNamespace string
+	kubeconfig        string
 )
 
 // oplogPushCmd represents the continuous oplog archiving procedure
@@ -50,6 +59,12 @@ var oplogPushCmd = &cobra.Command{
 
 func init() {
 	cmd.AddCommand(oplogPushCmd)
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&snapshotName, "snapshot-name", "", "", "Name of the snapshot")
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&snapshotNamespace, "snapshot-namespace", "n", "", "Namespace of the snapshot")
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&kubeconfig, "kubeconfig", "", "", "Path of the kubeconfig")
 }
 
 func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplogPushStatsArgs) error {
@@ -61,6 +76,8 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	}
 	uplProvider.ChangeDirectory(models.OplogArchBasePath)
 	uploader := archive.NewStorageUploader(uplProvider)
+	uploader.SetKubeClient(pushArgs.kubeClient)
+	uploader.SetSnapshot(snapshotName, snapshotNamespace)
 
 	// set up mongodb client and oplog fetcher
 	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)
@@ -129,6 +146,7 @@ type oplogPushRunArgs struct {
 	primaryWait        bool
 	primaryWaitTimeout time.Duration
 	lwUpdate           time.Duration
+	kubeClient         controllerclient.Client
 }
 
 func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
@@ -160,6 +178,20 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 	}
 
 	args.lwUpdate, err = conf.GetDurationSetting(conf.MongoDBLastWriteUpdateInterval)
+	if err != nil {
+		return
+	}
+
+	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return
+	}
+
+	args.kubeClient, err = factory.NewUncachedClient(clientConfig)
+	if err != nil {
+		return
+	}
+
 	return
 }
 
