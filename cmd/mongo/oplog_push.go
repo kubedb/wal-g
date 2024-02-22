@@ -2,7 +2,9 @@ package mongo
 
 import (
 	"context"
+	"k8s.io/klog/v2"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -38,7 +40,7 @@ var oplogPushCmd = &cobra.Command{
 		var err error
 		defer func() { tracelog.ErrorLogger.FatalOnError(err) }()
 
-		ctx, cancel := context.WithCancel(context.Background())
+		ctx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 		signalHandler := utility.NewSignalHandler(ctx, cancel, []os.Signal{syscall.SIGINT, syscall.SIGTERM})
 		defer func() { _ = signalHandler.Close() }()
 
@@ -77,71 +79,88 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	uploader := archive.NewStorageUploader(uplProvider)
 	uploader.SetKubeClient(pushArgs.kubeClient)
 	uploader.SetSnapshot(snapshotName, snapshotNamespace)
+	uploader.SetShardStatus(pushArgs.isShard)
 
-	// set up mongodb client and oplog fetcher
-	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)
-	if err != nil {
-		return err
-	}
-
-	tracelog.DebugLogger.Printf("starting archiving stats with arguments: %+v", statsArgs)
-	uploadStatsUpdater, err := configureUploadStatsUpdater(ctx, models.Timestamp{}, mongoClient, statsArgs)
-	if err != nil {
-		return err
-	}
-
-	if err = mongoClient.EnsureIsMaster(ctx); err != nil {
-		if !pushArgs.primaryWait {
+	for i, src := range pushArgs.mongodbURL {
+		// set up mongodb client for each mongod and oplog fetcher
+		src = "mongodb://root:CeNiu.D9h_(L6klh@127.0.0.1:27017/?directConnection=true"
+		tracelog.InfoLogger.Printf("src: %s", src)
+		mongoClient, err := client.NewMongoClient(ctx, src)
+		klog.Infoln("error from ping ", err)
+		if err != nil {
 			return err
 		}
-		tracelog.InfoLogger.Printf("Archiving is waiting for mongodb to become a primary")
-		if err = client.WaitForBecomePrimary(ctx, mongoClient, pushArgs.primaryWaitTimeout); err != nil {
+
+		tracelog.DebugLogger.Printf("starting archiving stats with arguments: %+v", statsArgs)
+		uploadStatsUpdater, err := configureUploadStatsUpdater(ctx, models.Timestamp{}, mongoClient, statsArgs)
+		if err != nil {
+			return err
+		}
+		tracelog.InfoLogger.Println("im sleeepinggggggggggggg")
+		time.Sleep(5 * time.Second)
+		tracelog.InfoLogger.Println("im wakeeeeeeeeeeeeeeeeeeeeeeee")
+		if err = mongoClient.EnsureIsMaster(ctx); err != nil {
+			tracelog.InfoLogger.Println("after master", err)
+			if !pushArgs.primaryWait {
+				return err
+			}
+			tracelog.InfoLogger.Println("primaryyyyyyyyyyyyyyyyyyyy", err, src)
+			tracelog.InfoLogger.Printf("Archiving is waiting for mongodb to become a primary")
+			if err = client.WaitForBecomePrimary(ctx, mongoClient, pushArgs.primaryWaitTimeout); err != nil {
+				return err
+			}
+		}
+
+		// Lookup for last timestamp archived to storage (set up storage downloader client)
+		downloader, err := archive.NewStorageDownloader(archive.NewDefaultStorageSettings())
+		if err != nil {
+			return err
+		}
+		since, err := discovery.ResolveStartingTS(ctx, downloader, mongoClient)
+		if err != nil {
+			return err
+		}
+		tracelog.InfoLogger.Printf("Archiving storage last known timestamp is %s", since)
+
+		// fetch cursor started from since TS or from newest TS (if since is not exists)
+		oplogCursor, since, err := discovery.BuildCursorFromTS(ctx, since, uploader, mongoClient)
+		if err != nil {
+			return err
+		}
+		tracelog.InfoLogger.Printf("Archiving is starting from timestamp %s", since)
+
+		/* File buffer is useful for debugging:
+		fileBatchBuffer, err := stages.NewFileBuffer("/run/wal-g-oplog-push")
+		defer tracelog.ErrorLogger.PrintError(fileBatchBuffer.Close())
+		*/
+
+		memoryBatchBuffer := stages.NewMemoryBuffer()
+		defer func() { tracelog.ErrorLogger.PrintOnError(memoryBatchBuffer.Close()) }()
+
+		uploader.SetClusterNum(i)
+
+		// set up storage archiver
+		oplogApplier := stages.NewStorageApplier(uploader,
+			memoryBatchBuffer,
+			pushArgs.archiveAfterSize,
+			pushArgs.archiveTimeout,
+			uploadStatsUpdater)
+		oplogFetcher := stages.NewCursorMajFetcher(mongoClient, oplogCursor, pushArgs.lwUpdate)
+
+		// run working cycle
+		err = mongo.HandleOplogPush(ctx, oplogFetcher, oplogApplier)
+		if err != nil {
 			return err
 		}
 	}
-
-	// Lookup for last timestamp archived to storage (set up storage downloader client)
-	downloader, err := archive.NewStorageDownloader(archive.NewDefaultStorageSettings())
-	if err != nil {
-		return err
-	}
-	since, err := discovery.ResolveStartingTS(ctx, downloader, mongoClient)
-	if err != nil {
-		return err
-	}
-	tracelog.InfoLogger.Printf("Archiving storage last known timestamp is %s", since)
-
-	// fetch cursor started from since TS or from newest TS (if since is not exists)
-	oplogCursor, since, err := discovery.BuildCursorFromTS(ctx, since, uploader, mongoClient)
-	if err != nil {
-		return err
-	}
-	tracelog.InfoLogger.Printf("Archiving is starting from timestamp %s", since)
-
-	/* File buffer is useful for debugging:
-	fileBatchBuffer, err := stages.NewFileBuffer("/run/wal-g-oplog-push")
-	defer tracelog.ErrorLogger.PrintError(fileBatchBuffer.Close())
-	*/
-
-	memoryBatchBuffer := stages.NewMemoryBuffer()
-	defer func() { tracelog.ErrorLogger.PrintOnError(memoryBatchBuffer.Close()) }()
-
-	// set up storage archiver
-	oplogApplier := stages.NewStorageApplier(uploader,
-		memoryBatchBuffer,
-		pushArgs.archiveAfterSize,
-		pushArgs.archiveTimeout,
-		uploadStatsUpdater)
-	oplogFetcher := stages.NewCursorMajFetcher(mongoClient, oplogCursor, pushArgs.lwUpdate)
-
-	// run working cycle
-	return mongo.HandleOplogPush(ctx, oplogFetcher, oplogApplier)
+	return nil
 }
 
 type oplogPushRunArgs struct {
 	archiveAfterSize   int
 	archiveTimeout     time.Duration
-	mongodbURL         string
+	mongodbURL         []string
+	isShard            bool
 	primaryWait        bool
 	primaryWaitTimeout time.Duration
 	lwUpdate           time.Duration
@@ -159,7 +178,13 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 		return
 	}
 
-	args.mongodbURL, err = internal.GetRequiredSetting(internal.MongoDBUriSetting)
+	mongodbAddress, err := internal.GetRequiredSetting(internal.MongodbSourceURI)
+	if err != nil {
+		return
+	}
+	args.mongodbURL = strings.Split(mongodbAddress, ";")
+
+	args.isShard, err = internal.GetBoolSettingDefault(internal.MongodbSourceShard, false)
 	if err != nil {
 		return
 	}

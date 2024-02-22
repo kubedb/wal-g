@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"k8s.io/klog/v2"
 	"time"
 
 	"github.com/mongodb/mongo-tools-common/db"
@@ -188,6 +189,7 @@ func NewMongoClient(ctx context.Context, uri string, setters ...Option) (*MongoC
 	if args.OplogAlwaysUpsert != nil {
 		applyOpsCmd = append(applyOpsCmd, bson.E{Key: "alwaysUpsert", Value: *args.OplogAlwaysUpsert})
 	}
+	klog.Infoln("1111111111111111111111111111111111111111111111111111", uri)
 
 	client, err := mongo.Connect(ctx,
 		options.Client().ApplyURI(uri).
@@ -197,6 +199,7 @@ func NewMongoClient(ctx context.Context, uri string, setters ...Option) (*MongoC
 	if err != nil {
 		return nil, err
 	}
+	klog.Infoln("222222222222222222222222222222222222222222222222", client.Ping(ctx, nil))
 
 	return &MongoClient{
 		c:           client,
@@ -247,6 +250,7 @@ func (mc *MongoClient) DropIndexes(ctx context.Context, dbName string, rawComman
 
 func (mc *MongoClient) EnsureIsMaster(ctx context.Context) error {
 	im, err := mc.IsMaster(ctx)
+	tracelog.InfoLogger.Printf("im: %v err: %v", im, err)
 	if err != nil {
 		return err
 	}

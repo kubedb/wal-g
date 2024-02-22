@@ -109,6 +109,10 @@ const (
 	ProfileMode          = "PROFILE_MODE"
 	ProfilePath          = "PROFILE_PATH"
 
+	// For AppsCode
+	MongodbSourceURI   = "MONGODB_SOURCE_URI"   // source mongodb uri's
+	MongodbSourceShard = "MONGODB_SOURCE_SHARD" // true if the source db is sharded cluster
+
 	MongoDBUriSetting                = "MONGODB_URI"
 	MongoDBLastWriteUpdateInterval   = "MONGODB_LAST_WRITE_UPDATE_INTERVAL"
 	MongoDBRestoreDisableHostResetup = "MONGODB_RESTORE_DISABLE_HOST_RESETUP"

@@ -123,7 +123,6 @@ func (sa *StorageApplier) Apply(ctx context.Context, oplogc chan *models.Oplog) 
 				errc <- fmt.Errorf("can not get reader from buffer: %w", err)
 				return
 			}
-
 			// TODO: move upload to the next stage, batch accumulation should not be blocked by upload
 			// or switch to PushStreamToDestination (async api):
 			// we don't know archive name beforehand, so upload stream and rename key (it leads to failures and require gc)
@@ -141,6 +140,7 @@ func (sa *StorageApplier) Apply(ctx context.Context, oplogc chan *models.Oplog) 
 				return
 			}
 			batchStartTS = lastKnownTS
+			tracelog.InfoLogger.Printf("out from infiniteeeeeeeeeeeeeeeeeeeeeeeeeeeeee")
 		}
 	}()
 

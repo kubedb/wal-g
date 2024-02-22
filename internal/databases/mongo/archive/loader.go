@@ -209,6 +209,8 @@ type StorageUploader struct {
 	kubeClient        controllerruntime.Client
 	snapshotName      string
 	snapshotNamespace string
+	isShard           bool
+	clusterNum        int
 }
 
 // NewStorageUploader builds mongodb uploader.
@@ -224,6 +226,18 @@ func (su *StorageUploader) SetKubeClient(client controllerruntime.Client) {
 func (su *StorageUploader) SetSnapshot(name, namespace string) {
 	su.snapshotName = name
 	su.snapshotNamespace = namespace
+}
+func (su *StorageUploader) SetShardStatus(isShard bool) {
+	su.isShard = isShard
+}
+func (su *StorageUploader) ShardedCLuster() bool {
+	return su.isShard
+}
+func (su *StorageUploader) SetClusterNum(cluster int) {
+	su.clusterNum = cluster
+}
+func (su *StorageUploader) GetClusterNum() int {
+	return su.clusterNum
 }
 
 func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp) error {
@@ -281,8 +295,13 @@ func (su *StorageUploader) UploadOplogArchive(ctx context.Context, stream io.Rea
 		return err
 	}
 
+	fileName := arch.Filename()
+	if su.ShardedCLuster() {
+		fileName = arch.ShardFilename(su.GetClusterNum())
+	}
+
 	// providing io.ReaderAt+io.ReadSeeker to s3 upload enables buffer pool usage
-	return su.Upload(ctx, arch.Filename(), bytes.NewReader(su.buf.Bytes()))
+	return su.Upload(ctx, fileName, bytes.NewReader(su.buf.Bytes()))
 }
 
 // UploadGap uploads mark indicating archiving gap.

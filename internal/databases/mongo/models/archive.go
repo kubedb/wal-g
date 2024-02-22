@@ -50,6 +50,12 @@ func (a Archive) Filename() string {
 	return fmt.Sprintf("%s_%v%s%v.%s", a.Type, a.Start, ArchNameTSDelimiter, a.End, a.Ext)
 }
 
+// ShardFilename builds archive filename from timestamps, extension and type with shard number
+// example: oplog_shard0_1569009857.10_1569009101.99.lzma
+func (a Archive) ShardFilename(clusterNum int) string {
+	return fmt.Sprintf("%s_%s%v_%v%s%v.%s", a.Type, "shard", clusterNum, a.Start, ArchNameTSDelimiter, a.End, a.Ext)
+}
+
 // Extension returns extension of archive file name.
 func (a Archive) Extension() string {
 	return a.Ext
