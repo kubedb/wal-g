@@ -50,6 +50,10 @@ func (a Archive) Filename() string {
 	return fmt.Sprintf("%s_%v%s%v.%s", a.Type, a.Start, ArchNameTSDelimiter, a.End, a.Ext)
 }
 
+func (a Archive) ShardFilename() string {
+	return fmt.Sprintf("%s_shard0_%v%s%v.%s", a.Type, a.Start, ArchNameTSDelimiter, a.End, a.Ext)
+}
+
 // Extension returns extension of archive file name.
 func (a Archive) Extension() string {
 	return a.Ext

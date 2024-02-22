@@ -77,6 +77,7 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	uploader := archive.NewStorageUploader(uplProvider)
 	uploader.SetKubeClient(pushArgs.kubeClient)
 	uploader.SetSnapshot(snapshotName, snapshotNamespace)
+	pushArgs.mongodbURL = "mongodb://root:zL3ru051r7YywiZR@simple-shard0-0.simple-shard0-pods.demo.svc.cluster.local:27017/?authSource=admin&connect=direct"
 
 	// set up mongodb client and oplog fetcher
 	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)

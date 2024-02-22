@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"k8s.io/klog/v2"
 	"time"
 
 	"github.com/mongodb/mongo-tools-common/db"
@@ -188,7 +189,7 @@ func NewMongoClient(ctx context.Context, uri string, setters ...Option) (*MongoC
 	if args.OplogAlwaysUpsert != nil {
 		applyOpsCmd = append(applyOpsCmd, bson.E{Key: "alwaysUpsert", Value: *args.OplogAlwaysUpsert})
 	}
-
+	klog.Infoln("urrrriiiiiiiiiiiiiiii", uri)
 	client, err := mongo.Connect(ctx,
 		options.Client().ApplyURI(uri).
 			SetAppName(driverAppName).
