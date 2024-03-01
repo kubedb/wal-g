@@ -14,6 +14,8 @@ func HandleOplogReplay(ctx context.Context,
 	until models.Timestamp,
 	fetcher stages.BetweenFetcher,
 	applier stages.Applier) error {
+	since = models.Timestamp{1709198864., 1}
+	until = models.Timestamp{1709199223, 1}
 	tracelog.InfoLogger.Printf("Since: %s, Until: %s", since, until)
 
 	errgrp, ctx := errgroup.WithContext(ctx)

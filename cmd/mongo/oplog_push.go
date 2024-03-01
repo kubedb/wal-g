@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	"k8s.io/klog/v2"
 	"os"
 	"syscall"
 	"time"
@@ -67,6 +68,7 @@ func init() {
 }
 
 func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplogPushStatsArgs) error {
+	klog.Infoln("ining...................")
 	// set up storage client
 	tracelog.DebugLogger.Printf("starting oplog archiving with arguments: %+v", pushArgs)
 	uplProvider, err := internal.ConfigureUploader()
@@ -77,7 +79,7 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	uploader := archive.NewStorageUploader(uplProvider)
 	uploader.SetKubeClient(pushArgs.kubeClient)
 	uploader.SetSnapshot(snapshotName, snapshotNamespace)
-	pushArgs.mongodbURL = "mongodb://root:zL3ru051r7YywiZR@simple-shard0-0.simple-shard0-pods.demo.svc.cluster.local:27017/?authSource=admin&connect=direct"
+	//pushArgs.mongodbURL = "mongodb://root:yyeolHlIrBwtNRIM@simple-configsvr-0.simple-configsvr-pods.demo.svc.cluster.local:27017/?authSource=admin&connect=direct"
 
 	// set up mongodb client and oplog fetcher
 	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)

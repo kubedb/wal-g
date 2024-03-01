@@ -112,6 +112,7 @@ func processArg(arg string, downloader *archive.StorageDownloader) (models.Times
 
 func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 	tracelog.DebugLogger.Printf("starting replay with arguments: %+v", replayArgs)
+	tracelog.InfoLogger.Printf("helloooooooooooooooooooooooo")
 
 	// set up mongodb client and oplog applier
 	var mongoClientArgs []client.Option
@@ -123,6 +124,7 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 		mongoClientArgs = append(mongoClientArgs,
 			client.OplogApplicationMode(client.OplogAppMode(*replayArgs.oplogApplicationMode)))
 	}
+	tracelog.InfoLogger.Printf("uriiiiiiiiiiiiiiiii %v", replayArgs.mongodbURL)
 
 	mongoClient, err := client.NewMongoClient(ctx, replayArgs.mongodbURL, mongoClientArgs...)
 	if err != nil {
@@ -136,6 +138,9 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 	dbApplier := oplog.NewDBApplier(mongoClient, false, replayArgs.ignoreErrCodes)
 	oplogApplier := stages.NewGenericApplier(dbApplier)
 
+	replayArgs.since = models.Timestamp{TS: 1709198864, Inc: 2}
+	replayArgs.until = models.Timestamp{TS: 1709199223, Inc: 1}
+
 	// set up storage downloader client
 	downloader, err := archive.NewStorageDownloader(archive.NewDefaultStorageSettings())
 	if err != nil {
@@ -148,7 +153,7 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 	}
 
 	// update since and until. since = matched archive start ts , until = matched archiver end ts
-	replayArgs.since, replayArgs.until = archive.GetUpdatedBackupTimes(archives, replayArgs.since, replayArgs.until)
+	//replayArgs.since, replayArgs.until = archive.GetUpdatedBackupTimes(archives, replayArgs.since, replayArgs.until)
 	dbApplier.SetUntilTime(replayArgs.until)
 	path, err := archive.SequenceBetweenTS(archives, replayArgs.since, replayArgs.until)
 	if err != nil {

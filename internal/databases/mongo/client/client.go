@@ -260,7 +260,7 @@ func (mc *MongoClient) EnsureIsMaster(ctx context.Context) error {
 
 func (mc *MongoClient) IsMaster(ctx context.Context) (models.IsMaster, error) {
 	im := IsMaster{}
-	err := mc.c.Database("test").RunCommand(ctx, bson.D{{Key: "isMaster", Value: 1}}).Decode(&im)
+	err := mc.c.Database("admin").RunCommand(ctx, bson.D{{Key: "isMaster", Value: 1}}).Decode(&im)
 	if err != nil {
 		return models.IsMaster{}, fmt.Errorf("isMaster command failed: %w", err)
 	}

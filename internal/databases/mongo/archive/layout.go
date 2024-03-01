@@ -41,6 +41,7 @@ func SequenceBetweenTS(archives []models.Archive, since, until models.Timestamp)
 			return nil, errors.Errorf("duplicate archives with the same end %+v (archives: %+v)", arch.End, archives)
 		}
 		lastTSArch[arch.End] = &arch
+		fmt.Printf("------------------------------arch: %v ---- %v ---- %v\n", arch, since, until)
 		if seqStart == nil && arch.In(since) {
 			seqStart = &arch
 		}
@@ -74,6 +75,7 @@ func SequenceBetweenTS(archives []models.Archive, since, until models.Timestamp)
 }
 
 func GetUpdatedBackupTimes(archives []models.Archive, since, until models.Timestamp) (models.Timestamp, models.Timestamp) {
+	tracelog.InfoLogger.Printf("11111111111111111 %v %v %v", since, until, archives)
 	var updatedSince models.Timestamp
 	for i := range archives {
 		arch := archives[i]
@@ -85,6 +87,7 @@ func GetUpdatedBackupTimes(archives []models.Archive, since, until models.Timest
 			updatedSince = arch.Start
 		}
 	}
+	tracelog.InfoLogger.Printf("22222222222222 %v %v", updatedSince, until)
 
 	return updatedSince, until
 }

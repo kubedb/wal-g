@@ -3,9 +3,6 @@ package oplog
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
-
 	"github.com/mongodb/mongo-tools-common/db"
 	"github.com/mongodb/mongo-tools-common/txn"
 	"github.com/mongodb/mongo-tools-common/util"
@@ -14,6 +11,7 @@ import (
 	"github.com/wal-g/wal-g/internal/databases/mongo/models"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"io"
 )
 
 type TypeAssertionError struct {
@@ -86,11 +84,13 @@ func NewDBApplier(m client.MongoDriver, preserveUUID bool, ignoreErrCodes map[st
 }
 
 func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
+	tracelog.InfoLogger.Printf("aplyyyyyyyyyyyyyyyyyyyy %v", ap.db)
 	op := db.Oplog{}
 	if err := bson.Unmarshal(opr.Data, &op); err != nil {
 		return fmt.Errorf("can not unmarshal oplog entry: %w", err)
 	}
 	tracelog.InfoLogger.Printf("op %+v: op time %v, until time %v", op, op.Timestamp.T, ap.until.TS)
+	tracelog.InfoLogger.Printf("opppppppppppppppppppppppppppp %v : %v", op.Operation, op.Namespace)
 
 	if op.Timestamp.T > ap.until.TS {
 		tracelog.InfoLogger.Printf("skipping op %+v due to: op time %v, until time %v", op, op.Timestamp.T, ap.until.TS)
@@ -98,7 +98,7 @@ func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
 	}
 
 	if err := ap.shouldSkip(op.Operation, op.Namespace); err != nil {
-		tracelog.DebugLogger.Printf("skipping op %+v due to: %+v", op, err)
+		tracelog.InfoLogger.Printf("skipping op %+v due to: %+v", op, err)
 		return nil
 	}
 
@@ -140,9 +140,9 @@ func (ap *DBApplier) shouldSkip(op, ns string) error {
 	}
 
 	// sharded clusters are not supported yet
-	if strings.HasPrefix(ns, "config.") {
-		return fmt.Errorf("config database op")
-	}
+	//if strings.HasPrefix(ns, "config.") {
+	//	return fmt.Errorf("config database op")
+	//}
 
 	return nil
 }

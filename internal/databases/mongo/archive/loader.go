@@ -282,7 +282,7 @@ func (su *StorageUploader) UploadOplogArchive(ctx context.Context, stream io.Rea
 	}
 
 	// providing io.ReaderAt+io.ReadSeeker to s3 upload enables buffer pool usage
-	return su.Upload(ctx, arch.ShardFilename(), bytes.NewReader(su.buf.Bytes()))
+	return su.Upload(ctx, arch.Filename(), bytes.NewReader(su.buf.Bytes()))
 }
 
 // UploadGap uploads mark indicating archiving gap.
