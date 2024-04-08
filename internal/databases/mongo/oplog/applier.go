@@ -3,17 +3,17 @@ package oplog
 import (
 	"context"
 	"fmt"
-	"io"
-	"strings"
-
 	"github.com/mongodb/mongo-tools-common/db"
 	"github.com/mongodb/mongo-tools-common/txn"
 	"github.com/mongodb/mongo-tools-common/util"
 	"github.com/wal-g/tracelog"
 	"github.com/wal-g/wal-g/internal/databases/mongo/client"
 	"github.com/wal-g/wal-g/internal/databases/mongo/models"
+	"github.com/wal-g/wal-g/internal/databases/mongo/shake"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
+	"io"
+	"strings"
 )
 
 type TypeAssertionError struct {
@@ -78,11 +78,13 @@ type DBApplier struct {
 	preserveUUID          bool
 	applyIgnoreErrorCodes map[string][]int32
 	until                 models.Timestamp
+	dbNode                string
+	filterList            shake.OplogFilterChain
 }
 
 // NewDBApplier builds DBApplier with given args.
-func NewDBApplier(m client.MongoDriver, preserveUUID bool, ignoreErrCodes map[string][]int32) *DBApplier {
-	return &DBApplier{db: m, txnBuffer: txn.NewBuffer(), preserveUUID: preserveUUID, applyIgnoreErrorCodes: ignoreErrCodes}
+func NewDBApplier(m client.MongoDriver, preserveUUID bool, ignoreErrCodes map[string][]int32, node string, filterList shake.OplogFilterChain) *DBApplier {
+	return &DBApplier{db: m, txnBuffer: txn.NewBuffer(), preserveUUID: preserveUUID, applyIgnoreErrorCodes: ignoreErrCodes, dbNode: node, filterList: filterList}
 }
 
 func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
@@ -97,10 +99,16 @@ func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
 		return nil
 	}
 
-	if err := ap.shouldSkip(op.Operation, op.Namespace); err != nil {
-		tracelog.DebugLogger.Printf("skipping op %+v due to: %+v", op, err)
-		return nil
+	if strings.HasPrefix(ap.dbNode, "shard") {
+		if ap.filterList.IterateFilter(&op) {
+			return nil
+		}
 	}
+
+	//if err := ap.shouldSkip(op.Operation, op.Namespace); err != nil {
+	//	tracelog.DebugLogger.Printf("skipping op %+v due to: %+v", op, err)
+	//	return nil
+	//}
 
 	meta, err := txn.NewMeta(op)
 	if err != nil {
@@ -140,7 +148,7 @@ func (ap *DBApplier) shouldSkip(op, ns string) error {
 	}
 
 	// sharded clusters are not supported yet
-	if strings.HasPrefix(ns, "config.") {
+	if (strings.HasPrefix(ns, "config.") || strings.HasPrefix(ns, "admin.")) && ap.dbNode != "configsvr" {
 		return fmt.Errorf("config database op")
 	}
 
@@ -201,7 +209,7 @@ func (ap *DBApplier) handleNonTxnOp(ctx context.Context, op db.Oplog) error {
 		return ap.db.DropIndexes(ctx, dbName, op.Object)
 	}
 
-	//tracelog.DebugLogger.Printf("applying op: %+v", op)
+	tracelog.InfoLogger.Printf("applying op: %+v", op)
 	if err := ap.db.ApplyOp(ctx, op); err != nil {
 		// we ignore some errors (for example 'duplicate key error')
 		// TODO: check after TOOLS-2041
