@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"encoding/json"
+	"github.com/wal-g/wal-g/internal/databases/mongo/shake"
 	"os"
 	"syscall"
 
@@ -48,6 +49,7 @@ type oplogReplayRunArgs struct {
 
 	ignoreErrCodes map[string][]int32
 	mongodbURL     string
+	dbNode         string
 
 	oplogAlwaysUpsert    *bool
 	oplogApplicationMode *string
@@ -74,7 +76,10 @@ func buildOplogReplayRunArgs(cmdargs []string) (args oplogReplayRunArgs, err err
 	if err != nil {
 		return
 	}
-
+	args.dbNode, err = internal.GetRequiredSetting(internal.MongoDBNode)
+	if err != nil {
+		return
+	}
 	oplogAlwaysUpsert, hasOplogAlwaysUpsert, err := internal.GetBoolSetting(internal.OplogReplayOplogAlwaysUpsert)
 	if err != nil {
 		return
@@ -133,7 +138,8 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 		return err
 	}
 
-	dbApplier := oplog.NewDBApplier(mongoClient, false, replayArgs.ignoreErrCodes)
+	filterList := shake.OplogFilterChain{new(shake.AutologousFilter), new(shake.NoopFilter), new(shake.DDLFilter)}
+	dbApplier := oplog.NewDBApplier(mongoClient, false, replayArgs.ignoreErrCodes, replayArgs.dbNode, filterList)
 	oplogApplier := stages.NewGenericApplier(dbApplier)
 
 	// set up storage downloader client
@@ -141,22 +147,23 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 	if err != nil {
 		return err
 	}
+	downloader.SetNodeSpecificDownloader(replayArgs.dbNode)
 	// discover archive sequence to replay
 	archives, err := downloader.ListOplogArchives()
 	if err != nil {
 		return err
 	}
-
 	// update since and until. since = matched archive start ts , until = matched archiver end ts
 	replayArgs.since, replayArgs.until = archive.GetUpdatedBackupTimes(archives, replayArgs.since, replayArgs.until)
 	dbApplier.SetUntilTime(replayArgs.until)
+
 	path, err := archive.SequenceBetweenTS(archives, replayArgs.since, replayArgs.until)
 	if err != nil {
 		return err
 	}
 
 	// setup storage fetcher
-	oplogFetcher := stages.NewStorageFetcher(downloader, path)
+	oplogFetcher := stages.NewStorageFetcher(downloader, path, replayArgs.dbNode)
 
 	// run worker cycle
 	return mongo.HandleOplogReplay(ctx, replayArgs.since, replayArgs.until, oplogFetcher, oplogApplier)

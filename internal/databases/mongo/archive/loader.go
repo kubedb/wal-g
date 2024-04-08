@@ -73,6 +73,7 @@ type StorageDownloader struct {
 	rootFolder    storage.Folder
 	oplogsFolder  storage.Folder
 	backupsFolder storage.Folder
+	dbNode        string
 }
 
 // NewStorageDownloader builds mongodb downloader.
@@ -85,6 +86,13 @@ func NewStorageDownloader(opts StorageSettings) (*StorageDownloader, error) {
 			oplogsFolder:  folder.GetSubFolder(opts.oplogsPath),
 			backupsFolder: folder.GetSubFolder(opts.backupsPath)},
 		nil
+}
+
+func (sd *StorageDownloader) SetNodeSpecificDownloader(node string) {
+	sd.dbNode = node
+}
+func (sd *StorageDownloader) GetNodeSpecificDownloader() string {
+	return sd.dbNode
 }
 
 // BackupMeta downloads sentinel contents.
@@ -124,7 +132,7 @@ func (sd *StorageDownloader) LastBackupName() (string, error) {
 
 // DownloadOplogArchive downloads, decompresses and decrypts (if needed) oplog archive.
 func (sd *StorageDownloader) DownloadOplogArchive(arch models.Archive, writeCloser io.WriteCloser) error {
-	return internal.DownloadFile(internal.NewFolderReader(sd.oplogsFolder), arch.Filename(), arch.Extension(), writeCloser)
+	return internal.DownloadFile(internal.NewFolderReader(sd.oplogsFolder), arch.DBNodeSpecificFileName(sd.GetNodeSpecificDownloader()), arch.Extension(), writeCloser)
 }
 
 // ListOplogArchives fetches all oplog archives existed in storage.
@@ -137,7 +145,10 @@ func (sd *StorageDownloader) ListOplogArchives() ([]models.Archive, error) {
 	archives := make([]models.Archive, 0, len(objects))
 	for _, key := range objects {
 		archName := key.GetName()
-		arch, err := models.ArchFromFilename(archName)
+		if !isOplogForSpecificNode(archName, sd.dbNode) {
+			continue
+		}
+		arch, err := models.ArchFromFilename(archName, sd.dbNode)
 		if err != nil {
 			return nil, fmt.Errorf("can not convert retrieve timestamps since oplog archive Ext '%s': %w", archName, err)
 		}
@@ -155,7 +166,11 @@ func (sd *StorageDownloader) LastKnownArchiveTS() (models.Timestamp, error) {
 	}
 	for _, key := range keys {
 		filename := key.GetName()
-		arch, err := models.ArchFromFilename(filename)
+		if !isOplogForSpecificNode(filename, sd.dbNode) {
+			continue
+		}
+		arch, err := models.ArchFromFilename(filename, sd.dbNode)
+		tracelog.InfoLogger.Printf("key: %v fileName: %v arch: %v", key, filename, arch)
 		if err != nil {
 			return models.Timestamp{}, fmt.Errorf("can not build archive since filename '%s': %w", filename, err)
 		}
@@ -209,6 +224,7 @@ type StorageUploader struct {
 	kubeClient        controllerruntime.Client
 	snapshotName      string
 	snapshotNamespace string
+	dbNode            string
 }
 
 // NewStorageUploader builds mongodb uploader.
@@ -225,6 +241,12 @@ func (su *StorageUploader) SetSnapshot(name, namespace string) {
 	su.snapshotName = name
 	su.snapshotNamespace = namespace
 }
+func (su *StorageUploader) SetDBNode(node string) {
+	su.dbNode = node
+}
+func (su *StorageUploader) GetDBNode() string {
+	return su.dbNode
+}
 
 func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp) error {
 	var snapshot storageapi.Snapshot
@@ -236,6 +258,9 @@ func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp) erro
 		return err
 	}
 
+	compName := "wal"
+	compName = compName + "-" + su.GetDBNode()
+
 	_, err = kmc.PatchStatus(
 		context.TODO(),
 		su.kubeClient,
@@ -244,17 +269,17 @@ func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp) erro
 			in := obj.(*storageapi.Snapshot)
 			if len(in.Status.Components) == 0 {
 				in.Status.Components = make(map[string]storageapi.Component)
-
+			}
+			if _, ok := in.Status.Components[compName]; !ok {
 				walSegments := make([]storageapi.WalSegment, 1)
 				walSegments[0].Start = &metav1.Time{Time: time.Unix(int64(firstTS.ToBsonTS().T), 0)}
-				in.Status.Components["wal"] = storageapi.Component{
+				in.Status.Components[compName] = storageapi.Component{
 					WalSegments: walSegments,
 				}
 			}
-
-			component := in.Status.Components["wal"]
+			component := in.Status.Components[compName]
 			component.WalSegments[0].End = &metav1.Time{Time: time.Unix(int64(lastTS.ToBsonTS().T), 0)}
-			in.Status.Components["wal"] = component
+			in.Status.Components[compName] = component
 
 			return in
 		},
@@ -281,8 +306,10 @@ func (su *StorageUploader) UploadOplogArchive(ctx context.Context, stream io.Rea
 		return err
 	}
 
+	fileName := arch.DBNodeSpecificFileName(su.dbNode)
+
 	// providing io.ReaderAt+io.ReadSeeker to s3 upload enables buffer pool usage
-	return su.Upload(ctx, arch.Filename(), bytes.NewReader(su.buf.Bytes()))
+	return su.Upload(ctx, fileName, bytes.NewReader(su.buf.Bytes()))
 }
 
 // UploadGap uploads mark indicating archiving gap.
@@ -296,7 +323,7 @@ func (su *StorageUploader) UploadGapArchive(archErr error, firstTS, lastTS model
 		return fmt.Errorf("can not build archive: %w", err)
 	}
 
-	if err := su.PushStreamToDestination(context.Background(), strings.NewReader(archErr.Error()), arch.Filename()); err != nil {
+	if err := su.PushStreamToDestination(context.Background(), strings.NewReader(archErr.Error()), arch.DBNodeSpecificFileName(su.dbNode)); err != nil {
 		return fmt.Errorf("error while uploading stream: %w", err)
 	}
 	return nil
@@ -365,4 +392,8 @@ func (sp *StoragePurger) DeleteOplogArchives(archives []models.Archive) error {
 	}
 	tracelog.DebugLogger.Printf("Oplog keys will be deleted: %+v\n", oplogKeys)
 	return sp.oplogsFolder.DeleteObjects(oplogKeys)
+}
+
+func isOplogForSpecificNode(fileName, node string) bool {
+	return strings.Contains(fileName, node)
 }
