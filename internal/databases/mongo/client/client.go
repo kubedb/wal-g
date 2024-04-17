@@ -350,9 +350,10 @@ func (mc *MongoClient) ApplyOp(ctx context.Context, dbop db.Oplog) error {
 	cmd[0] = bson.E{Key: "applyOps", Value: []interface{}{op}}
 	apply := mc.c.Database("admin").RunCommand(ctx, cmd)
 	if err := apply.Err(); err != nil {
-		//if mongo.IsDuplicateKeyError(err) {
-		//	return nil
-		//}
+		fmt.Println("-------------------------------------", err)
+		if mongo.IsDuplicateKeyError(err) {
+			return nil
+		}
 		return err
 	}
 	resp := CmdResponse{}
