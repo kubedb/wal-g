@@ -203,6 +203,9 @@ func NewMongoClient(ctx context.Context, uri string, setters ...Option) (*MongoC
 		applyOpsCmd: applyOpsCmd,
 	}, client.Ping(ctx, nil)
 }
+func (m *MongoClient) GetClient() *mongo.Client {
+	return m.c
+}
 
 // IndexDocument holds information about a collection's index.
 type IndexDocument struct {

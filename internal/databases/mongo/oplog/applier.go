@@ -80,11 +80,13 @@ type DBApplier struct {
 	until                 models.Timestamp
 	dbNode                string
 	filterList            shake.OplogFilterChain
+	dbClient              *mongo.Client
 }
 
 // NewDBApplier builds DBApplier with given args.
-func NewDBApplier(m client.MongoDriver, preserveUUID bool, ignoreErrCodes map[string][]int32, node string, filterList shake.OplogFilterChain) *DBApplier {
-	return &DBApplier{db: m, txnBuffer: txn.NewBuffer(), preserveUUID: preserveUUID, applyIgnoreErrorCodes: ignoreErrCodes, dbNode: node, filterList: filterList}
+func NewDBApplier(m client.MongoDriver, preserveUUID bool, ignoreErrCodes map[string][]int32, node string, filterList shake.OplogFilterChain, client *mongo.Client) *DBApplier {
+	return &DBApplier{db: m, txnBuffer: txn.NewBuffer(), preserveUUID: preserveUUID,
+		applyIgnoreErrorCodes: ignoreErrCodes, dbNode: node, filterList: filterList, dbClient: client}
 }
 
 func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
@@ -103,6 +105,7 @@ func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
 		if ap.filterList.IterateFilter(&op) {
 			return nil
 		}
+		shake.ApplyOplogForShard(&op, ap.dbClient)
 	}
 
 	//if err := ap.shouldSkip(op.Operation, op.Namespace); err != nil {
