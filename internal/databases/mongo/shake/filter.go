@@ -95,5 +95,5 @@ type DDLFilter struct {
 
 func (filter *DDLFilter) Filter(log *db.Oplog) bool {
 	operation, _ := ExtraCommandName(log.Object)
-	return log.Operation == "c" && operation != "applyOps" && operation != "create" || strings.HasSuffix(log.Namespace, "system.indexes")
+	return log.Operation == "c" && operation != "applyOps" && operation != "create" && operation != "delete" || strings.HasSuffix(log.Namespace, "system.indexes")
 }

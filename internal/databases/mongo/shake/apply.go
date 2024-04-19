@@ -43,7 +43,17 @@ updateOne:
 */
 func doUpdate(op *db.Oplog, client *mongo.Client, ns []string) error {
 	collectionHandle := client.Database(ns[0]).Collection(ns[1])
+
+	var update interface{}
+	var err error
+	var res *mongo.UpdateResult
 	if FindFiledPrefix(op.Object, "$") {
+		var oplogErr error
 		oplogVer, ok := GetKey(op.Object, versionMark).(int32)
+		if ok && oplogVer == 2 {
+			if update, oplogErr = DiffUpdateOplogToNormal(op.Object); oplogErr != nil {
+				return oplogErr
+			}
+		}
 	}
 }
