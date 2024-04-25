@@ -75,7 +75,6 @@ func SequenceBetweenTS(archives []models.Archive, since, until models.Timestamp)
 
 func GetUpdatedBackupTimes(archives []models.Archive, since, until models.Timestamp) (models.Timestamp, models.Timestamp) {
 	var updatedSince models.Timestamp
-	//var minimum []models.Timestamp
 	for i := range archives {
 		arch := archives[i]
 		if arch.Type != models.ArchiveTypeOplog {
@@ -85,20 +84,7 @@ func GetUpdatedBackupTimes(archives []models.Archive, since, until models.Timest
 		if arch.In(since) {
 			updatedSince = arch.Start
 		}
-		//minimum = append(minimum, arch.Start)
-		//fmt.Printf("ar---- %v %v\n", arch.Start, arch.End)
 	}
-	//sort.Slice(minimum, func(i, j int) bool {
-	//	if minimum[i].TS == minimum[j].TS {
-	//		return minimum[i].Inc < minimum[j].Inc
-	//	}
-	//	return minimum[i].TS < minimum[j].TS
-	//})
-	//fmt.Println("------", minimum[0], updatedSince)
-	//if structs.IsZero(updatedSince) {
-	//	updatedSince = minimum[0]
-	//}
-
 	return updatedSince, until
 }
 

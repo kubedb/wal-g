@@ -138,8 +138,8 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 		return err
 	}
 
-	filterList := shake.OplogFilterChain{new(shake.AutologousFilter), new(shake.NoopFilter), new(shake.DDLFilter)}
-	dbApplier := oplog.NewDBApplier(mongoClient, false, replayArgs.ignoreErrCodes, replayArgs.dbNode, filterList)
+	filterList := shake.OplogFilterChain{new(shake.AutologousFilter), new(shake.NoopFilter)}
+	dbApplier := oplog.NewDBApplier(mongoClient, true, replayArgs.ignoreErrCodes, replayArgs.dbNode, filterList)
 	oplogApplier := stages.NewGenericApplier(dbApplier)
 
 	// set up storage downloader client

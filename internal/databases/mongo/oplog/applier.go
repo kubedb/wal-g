@@ -13,7 +13,6 @@ import (
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"io"
-	"strings"
 )
 
 type TypeAssertionError struct {
@@ -83,8 +82,10 @@ type DBApplier struct {
 }
 
 // NewDBApplier builds DBApplier with given args.
-func NewDBApplier(m client.MongoDriver, preserveUUID bool, ignoreErrCodes map[string][]int32, node string, filterList shake.OplogFilterChain) *DBApplier {
-	return &DBApplier{db: m, txnBuffer: txn.NewBuffer(), preserveUUID: preserveUUID, applyIgnoreErrorCodes: ignoreErrCodes, dbNode: node, filterList: filterList}
+func NewDBApplier(m client.MongoDriver, preserveUUID bool, ignoreErrCodes map[string][]int32,
+	node string, filterList shake.OplogFilterChain) *DBApplier {
+	return &DBApplier{db: m, txnBuffer: txn.NewBuffer(), preserveUUID: preserveUUID,
+		applyIgnoreErrorCodes: ignoreErrCodes, dbNode: node, filterList: filterList}
 }
 
 func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
@@ -99,16 +100,11 @@ func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
 		return nil
 	}
 
-	if strings.HasPrefix(ap.dbNode, "shard") {
+	if ap.dbNode != "configsvr" {
 		if ap.filterList.IterateFilter(&op) {
 			return nil
 		}
 	}
-
-	//if err := ap.shouldSkip(op.Operation, op.Namespace); err != nil {
-	//	tracelog.DebugLogger.Printf("skipping op %+v due to: %+v", op, err)
-	//	return nil
-	//}
 
 	meta, err := txn.NewMeta(op)
 	if err != nil {
@@ -142,26 +138,15 @@ func (ap *DBApplier) Close(ctx context.Context) error {
 	return nil
 }
 
-func (ap *DBApplier) shouldSkip(op, ns string) error {
-	if op == "n" {
-		return fmt.Errorf("noop op")
-	}
-
-	// sharded clusters are not supported yet
-	if (strings.HasPrefix(ns, "config.") || strings.HasPrefix(ns, "admin.")) && ap.dbNode != "configsvr" {
-		return fmt.Errorf("config database op")
-	}
-
-	return nil
-}
-
 // shouldIgnore checks if error should be ignored
 func (ap *DBApplier) shouldIgnore(op string, err error) bool {
 	ce, ok := err.(mongo.CommandError)
 	if !ok {
 		return false
 	}
-
+	if mongo.IsDuplicateKeyError(err) {
+		return true
+	}
 	ignoreErrorCodes, ok := ap.applyIgnoreErrorCodes[op]
 	if !ok {
 		return false
@@ -273,8 +258,8 @@ func indexSpecFromCommitIndexBuilds(op db.Oplog) (string, []client.IndexDocument
 				if !ok {
 					return "", nil, NewTypeAssertionError("bson.D", fmt.Sprintf("indexes[%d]", i), elemE.Value)
 				}
-				for i := range elements {
-					elemE = elements[i]
+				for j := range elements {
+					elemE = elements[j]
 					if elemE.Key == "key" {
 						if indexSpecs[i].Key, ok = elemE.Value.(bson.D); !ok {
 							return "", nil, NewTypeAssertionError("bson.D", "key", elemE.Value)

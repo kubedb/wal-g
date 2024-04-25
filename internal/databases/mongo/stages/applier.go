@@ -34,7 +34,6 @@ func NewGenericApplier(applier oplog.Applier) *GenericApplier {
 
 // Apply runs working cycle that applies oplog records.
 func (dba *GenericApplier) Apply(ctx context.Context, ch chan *models.Oplog) (chan error, error) {
-
 	errc := make(chan error)
 	go func() {
 		defer close(errc)

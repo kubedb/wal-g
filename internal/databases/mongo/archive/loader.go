@@ -132,7 +132,8 @@ func (sd *StorageDownloader) LastBackupName() (string, error) {
 
 // DownloadOplogArchive downloads, decompresses and decrypts (if needed) oplog archive.
 func (sd *StorageDownloader) DownloadOplogArchive(arch models.Archive, writeCloser io.WriteCloser) error {
-	return internal.DownloadFile(internal.NewFolderReader(sd.oplogsFolder), arch.DBNodeSpecificFileName(sd.GetNodeSpecificDownloader()), arch.Extension(), writeCloser)
+	return internal.DownloadFile(internal.NewFolderReader(sd.oplogsFolder),
+		arch.DBNodeSpecificFileName(sd.GetNodeSpecificDownloader()), arch.Extension(), writeCloser)
 }
 
 // ListOplogArchives fetches all oplog archives existed in storage.
@@ -170,7 +171,6 @@ func (sd *StorageDownloader) LastKnownArchiveTS() (models.Timestamp, error) {
 			continue
 		}
 		arch, err := models.ArchFromFilename(filename, sd.dbNode)
-		tracelog.InfoLogger.Printf("key: %v fileName: %v arch: %v", key, filename, arch)
 		if err != nil {
 			return models.Timestamp{}, fmt.Errorf("can not build archive since filename '%s': %w", filename, err)
 		}
@@ -323,7 +323,8 @@ func (su *StorageUploader) UploadGapArchive(archErr error, firstTS, lastTS model
 		return fmt.Errorf("can not build archive: %w", err)
 	}
 
-	if err := su.PushStreamToDestination(context.Background(), strings.NewReader(archErr.Error()), arch.DBNodeSpecificFileName(su.dbNode)); err != nil {
+	if err := su.PushStreamToDestination(context.Background(), strings.NewReader(archErr.Error()),
+		arch.DBNodeSpecificFileName(su.dbNode)); err != nil {
 		return fmt.Errorf("error while uploading stream: %w", err)
 	}
 	return nil
