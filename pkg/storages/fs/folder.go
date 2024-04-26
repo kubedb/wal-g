@@ -92,6 +92,7 @@ func (folder *Folder) Exists(objectRelativePath string) (bool, error) {
 
 func (folder *Folder) GetSubFolder(subFolderRelativePath string) storage.Folder {
 	sf := NewFolder(folder.rootPath, path.Join(folder.subpath, subFolderRelativePath))
+	fmt.Println("---------------", sf)
 	_ = sf.EnsureExists()
 
 	// This is something unusual when we cannot be sure that our subfolder exists in FS

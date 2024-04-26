@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 	"os"
+	"path"
 	"syscall"
 	"time"
 
@@ -73,7 +74,11 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	if err != nil {
 		return err
 	}
-	uplProvider.ChangeDirectory(models.OplogArchBasePath)
+	subDir := models.OplogArchBasePath
+	if pushArgs.dbProvider == "local" {
+		subDir = path.Join(pushArgs.dbPath, subDir)
+	}
+	uplProvider.ChangeDirectory(subDir)
 	uploader := archive.NewStorageUploader(uplProvider)
 	uploader.SetKubeClient(pushArgs.kubeClient)
 	uploader.SetSnapshot(snapshotName, snapshotNamespace)
@@ -146,6 +151,8 @@ type oplogPushRunArgs struct {
 	primaryWaitTimeout time.Duration
 	lwUpdate           time.Duration
 	kubeClient         controllerclient.Client
+	dbProvider         string
+	dbPath             string
 }
 
 func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
@@ -160,6 +167,16 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 	}
 
 	args.mongodbURL, err = internal.GetRequiredSetting(internal.MongoDBUriSetting)
+	if err != nil {
+		return
+	}
+
+	args.dbProvider, err = internal.GetRequiredSetting(internal.MongoDBProvider)
+	if err != nil {
+		return
+	}
+
+	args.dbPath, err = internal.GetRequiredSetting(internal.MongoDBPath)
 	if err != nil {
 		return
 	}
