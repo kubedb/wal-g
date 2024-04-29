@@ -208,7 +208,7 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 		return
 	}
 
-	return
+	return args, err
 }
 
 type oplogPushStatsArgs struct {
