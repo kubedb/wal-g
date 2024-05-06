@@ -2,6 +2,7 @@ package mongo
 
 import (
 	"context"
+	storageapi "kubestash.dev/apimachinery/apis/storage/v1alpha1"
 	"os"
 	"path"
 	"syscall"
@@ -75,7 +76,7 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 		return err
 	}
 	subDir := models.OplogArchBasePath
-	if pushArgs.dbProvider == "local" {
+	if pushArgs.dbProvider == string(storageapi.ProviderLocal) {
 		subDir = path.Join(pushArgs.dbPath, subDir)
 	}
 	uplProvider.ChangeDirectory(subDir)
@@ -171,15 +172,9 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 		return
 	}
 
-	args.dbProvider, err = internal.GetRequiredSetting(internal.MongoDBProvider)
-	if err != nil {
-		return
-	}
+	args.dbProvider = internal.GetNonRequiredSetting(internal.MongoDBProvider)
 
-	args.dbPath, err = internal.GetRequiredSetting(internal.MongoDBPath)
-	if err != nil {
-		return
-	}
+	args.dbPath = internal.GetNonRequiredSetting(internal.MongoDBPath)
 
 	args.primaryWait, err = internal.GetBoolSettingDefault(internal.OplogPushWaitForBecomePrimary, false)
 	if err != nil {
