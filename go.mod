@@ -64,6 +64,7 @@ require (
 	github.com/prometheus/client_golang v1.13.0
 	github.com/prometheus/client_model v0.2.0
 	golang.org/x/mod v0.9.0
+	golang.org/x/net v0.17.0
 	golang.org/x/sys v0.13.0
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.25.3
@@ -187,7 +188,6 @@ require (
 	github.com/yudai/golcs v0.0.0-20170316035057-ecda9a501e82 // indirect
 	go.opencensus.io v0.24.0 // indirect
 	go.uber.org/atomic v1.9.0 // indirect
-	golang.org/x/net v0.17.0 // indirect
 	golang.org/x/oauth2 v0.13.0 // indirect
 	golang.org/x/term v0.13.0 // indirect
 	golang.org/x/text v0.13.0 // indirect
