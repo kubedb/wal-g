@@ -194,7 +194,7 @@ func (ap *DBApplier) handleNonTxnOp(ctx context.Context, op db.Oplog) error {
 		return ap.db.DropIndexes(ctx, dbName, op.Object)
 	}
 
-	tracelog.InfoLogger.Printf("applying op: %+v", op)
+	//tracelog.DebugLogger.Printf("applying op: %+v", op)
 	if err := ap.db.ApplyOp(ctx, op); err != nil {
 		// we ignore some errors (for example 'duplicate key error')
 		// TODO: check after TOOLS-2041

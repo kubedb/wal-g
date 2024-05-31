@@ -16,7 +16,7 @@ type OplogFilterChain []OplogFilter
 func (chain OplogFilterChain) IterateFilter(log *db.Oplog) bool {
 	for _, filter := range chain {
 		if filter.Filter(log) {
-			tracelog.InfoLogger.Printf("%v filter oplog[%v]", reflect.TypeOf(filter), log)
+			tracelog.DebugLogger.Printf("%v filter oplog[%v]", reflect.TypeOf(filter), log)
 			return true
 		}
 	}
