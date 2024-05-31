@@ -15,9 +15,9 @@ const (
 	ArchiveTypeGap      = "gap"
 )
 
-var (
-	ArchRegexp = regexp.MustCompile(`^(oplog|gap)_(?P<startTS>[0-9]+\.[0-9]+)_(?P<endTS>[0-9]+\.[0-9]+)\.(?P<Ext>[^$]+)$`)
-)
+//var (
+//	ArchRegexp = regexp.MustCompile(`^(oplog|gap)_shard0_(?P<startTS>[0-9]+\.[0-9]+)_(?P<endTS>[0-9]+\.[0-9]+)\.(?P<Ext>[^$]+)$`)
+//)
 
 // Archive defines oplog archive representation.
 type Archive struct {
@@ -49,6 +49,9 @@ func (a Archive) In(ts Timestamp) bool {
 func (a Archive) Filename() string {
 	return fmt.Sprintf("%s_%v%s%v.%s", a.Type, a.Start, ArchNameTSDelimiter, a.End, a.Ext)
 }
+func (a Archive) DBNodeSpecificFileName(node string) string {
+	return fmt.Sprintf("%s_%s_%v%s%v.%s", a.Type, node, a.Start, ArchNameTSDelimiter, a.End, a.Ext)
+}
 
 // Extension returns extension of archive file name.
 func (a Archive) Extension() string {
@@ -57,7 +60,10 @@ func (a Archive) Extension() string {
 
 // ArchFromFilename builds Arch from given path.
 // TODO: support empty extension
-func ArchFromFilename(path string) (Archive, error) {
+func ArchFromFilename(path string, node string) (Archive, error) {
+	format := fmt.Sprintf(`^(oplog|gap)_%v_(?P<startTS>[0-9]+\.[0-9]+)_(?P<endTS>[0-9]+\.[0-9]+)\.(?P<Ext>[^$]+)$`, node)
+	ArchRegexp := regexp.MustCompile(format)
+
 	res := ArchRegexp.FindAllStringSubmatch(path, -1)
 	if len(res) != 1 {
 		return Archive{}, fmt.Errorf("can not parse oplog path: %s", path)

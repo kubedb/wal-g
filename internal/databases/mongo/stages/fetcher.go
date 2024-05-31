@@ -142,11 +142,12 @@ func (cb *CloserBuffer) Close() error {
 type StorageFetcher struct {
 	downloader archive.Downloader
 	path       archive.Sequence
+	dbNode     string
 }
 
 // NewStorageFetcher builds StorageFetcher instance
-func NewStorageFetcher(downloader archive.Downloader, path archive.Sequence) *StorageFetcher {
-	return &StorageFetcher{downloader: downloader, path: path}
+func NewStorageFetcher(downloader archive.Downloader, path archive.Sequence, node string) *StorageFetcher {
+	return &StorageFetcher{downloader: downloader, path: path, dbNode: node}
 }
 
 // FetchBetween returns channel of oplog records, channel is filled in background.
@@ -168,11 +169,11 @@ func (sf *StorageFetcher) FetchBetween(ctx context.Context,
 		firstFound := false
 
 		for _, arch := range path {
-			tracelog.DebugLogger.Printf("Fetching archive %s", arch.Filename())
+			tracelog.DebugLogger.Printf("Fetching archive %s", arch.DBNodeSpecificFileName(sf.dbNode))
 
 			err := sf.downloader.DownloadOplogArchive(arch, buf)
 			if err != nil {
-				errc <- fmt.Errorf("failed to download archive %s: %w", arch.Filename(), err)
+				errc <- fmt.Errorf("failed to download archive %s: %w", arch.DBNodeSpecificFileName(sf.dbNode), err)
 				return
 			}
 
@@ -215,7 +216,7 @@ func (sf *StorageFetcher) FetchBetween(ctx context.Context,
 			}
 			buf.Reset()
 			if !firstFound { // TODO: do we need this check, add skip flag
-				errc <- fmt.Errorf("'from' timestamp '%s' was not found in first archive: %s", from, arch.Filename())
+				errc <- fmt.Errorf("'from' timestamp '%s' was not found in first archive: %s", from, arch.DBNodeSpecificFileName(sf.dbNode))
 				return
 			}
 		}

@@ -83,6 +83,7 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	uploader := archive.NewStorageUploader(uplProvider)
 	uploader.SetKubeClient(pushArgs.kubeClient)
 	uploader.SetSnapshot(snapshotName, snapshotNamespace)
+	uploader.SetDBNode(pushArgs.dbNode)
 
 	// set up mongodb client and oplog fetcher
 	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)
@@ -111,6 +112,8 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	if err != nil {
 		return err
 	}
+	downloader.SetNodeSpecificDownloader(uploader.GetDBNode())
+
 	since, err := discovery.ResolveStartingTS(ctx, downloader, mongoClient)
 	if err != nil {
 		return err
@@ -148,6 +151,7 @@ type oplogPushRunArgs struct {
 	archiveAfterSize   int
 	archiveTimeout     time.Duration
 	mongodbURL         string
+	dbNode             string
 	primaryWait        bool
 	primaryWaitTimeout time.Duration
 	lwUpdate           time.Duration
@@ -168,6 +172,10 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 	}
 
 	args.mongodbURL, err = internal.GetRequiredSetting(internal.MongoDBUriSetting)
+	if err != nil {
+		return
+	}
+	args.dbNode, err = internal.GetRequiredSetting(internal.MongoDBNode)
 	if err != nil {
 		return
 	}

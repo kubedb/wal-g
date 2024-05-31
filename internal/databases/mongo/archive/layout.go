@@ -85,7 +85,6 @@ func GetUpdatedBackupTimes(archives []models.Archive, since, until models.Timest
 			updatedSince = arch.Start
 		}
 	}
-
 	return updatedSince, until
 }
 
