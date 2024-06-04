@@ -117,7 +117,10 @@ const (
 	ProfileMode          = "PROFILE_MODE"
 	ProfilePath          = "PROFILE_PATH"
 
+	MongoDBProvider                  = "MONGODB_PROVIDER"
+	MongoDBPath                      = "MONGODB_PATH"
 	MongoDBUriSetting                = "MONGODB_URI"
+	MongoDBNode                      = "MONGODB_NODE"
 	MongoDBLastWriteUpdateInterval   = "MONGODB_LAST_WRITE_UPDATE_INTERVAL"
 	MongoDBRestoreDisableHostResetup = "MONGODB_RESTORE_DISABLE_HOST_RESETUP"
 	OplogArchiveAfterSize            = "OPLOG_ARCHIVE_AFTER_SIZE"
@@ -826,6 +829,11 @@ func GetRequiredSetting(setting string) (string, error) {
 		return "", NewUnsetRequiredSettingError(setting)
 	}
 	return val, nil
+}
+
+func GetNonRequiredSetting(setting string) string {
+	val, _ := GetSetting(setting)
+	return val
 }
 
 func GetBoolSettingDefault(setting string, def bool) (bool, error) {

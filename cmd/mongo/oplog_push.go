@@ -2,7 +2,9 @@ package mongo
 
 import (
 	"context"
+	storageapi "kubestash.dev/apimachinery/apis/storage/v1alpha1"
 	"os"
+	"path"
 	"syscall"
 	"time"
 
@@ -74,10 +76,15 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	if err != nil {
 		return err
 	}
-	uplProvider.ChangeDirectory(models.OplogArchBasePath)
+	subDir := models.OplogArchBasePath
+	if pushArgs.dbProvider == string(storageapi.ProviderLocal) {
+		subDir = path.Join(pushArgs.dbPath, subDir)
+	}
+	uplProvider.ChangeDirectory(subDir)
 	uploader := archive.NewStorageUploader(uplProvider)
 	uploader.SetKubeClient(pushArgs.kubeClient)
 	uploader.SetSnapshot(snapshotName, snapshotNamespace)
+	uploader.SetDBNode(pushArgs.dbNode)
 
 	// set up mongodb client and oplog fetcher
 	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)
@@ -106,6 +113,8 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	if err != nil {
 		return err
 	}
+	downloader.SetNodeSpecificDownloader(uploader.GetDBNode())
+
 	since, err := discovery.ResolveStartingTS(ctx, downloader, mongoClient)
 	if err != nil {
 		return err
@@ -143,6 +152,9 @@ type oplogPushRunArgs struct {
 	archiveAfterSize   int
 	archiveTimeout     time.Duration
 	mongodbURL         string
+	dbNode             string
+	dbProvider         string
+	dbPath             string
 	primaryWait        bool
 	primaryWaitTimeout time.Duration
 	lwUpdate           time.Duration
@@ -164,6 +176,15 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 	if err != nil {
 		return
 	}
+
+	args.dbNode, err = conf.GetRequiredSetting(conf.MongoDBNode)
+	if err != nil {
+		return
+	}
+
+	args.dbProvider = conf.GetNonRequiredSetting(conf.MongoDBProvider)
+
+	args.dbPath = conf.GetNonRequiredSetting(conf.MongoDBPath)
 
 	args.primaryWait, err = conf.GetBoolSettingDefault(conf.OplogPushWaitForBecomePrimary, false)
 	if err != nil {
@@ -192,7 +213,7 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 		return
 	}
 
-	return
+	return args, err
 }
 
 type oplogPushStatsArgs struct {
