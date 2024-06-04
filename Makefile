@@ -19,6 +19,7 @@ MONGO_VERSION ?= "4.2.8"
 GOLANGCI_LINT_VERSION ?= "v1.52.2"
 REDIS_VERSION ?= "5.0.8"
 TOOLS_MOD_DIR := ./internal/tools
+REGISTRY := sayedppqq
 
 BUILD_TAGS:=
 
@@ -308,3 +309,8 @@ unlink_libsodium:
 build_client:
 	cd cmd/daemonclient && \
 	go build -o ../../bin/walg-daemon-client -ldflags "-s -w -X main.buildDate=`date -u +%Y.%m.%d_%H:%M:%S` -X main.gitRevision=`git rev-parse --short HEAD` -X main.version=`git tag -l --points-at HEAD`"
+
+update: mongo_build
+	docker build --tag walg:1.0 ./main/mongo
+	docker tag walg:1.0 ${REGISTRY}/walg:1.0
+	docker push ${REGISTRY}/walg:1.0
