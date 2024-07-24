@@ -20,7 +20,7 @@ func HandleLogRestore(backupName string, untilTS string, dbnames []string, fromn
 	signalHandler := utility.NewSignalHandler(ctx, cancel, []os.Signal{syscall.SIGINT, syscall.SIGTERM})
 	defer func() { _ = signalHandler.Close() }()
 
-	st, err := internal.ConfigureStorage()
+	st, err := internal.ConfigureStorageForKubeStashFullBackup()
 	tracelog.ErrorLogger.FatalOnError(err)
 
 	folder := st.RootFolder()

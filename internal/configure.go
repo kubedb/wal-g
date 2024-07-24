@@ -35,6 +35,7 @@ const (
 	DefaultDataBurstRateLimit = 8 * pgDefaultDatabasePageSize
 	DefaultDataFolderPath     = "/tmp"
 	WaleFileHost              = "file://localhost"
+	kubeStashFullBackupPrefix = "KUBESTASH_FULL_BACKUP_PREFIX"
 )
 
 var DeprecatedExternalGpgMessage = fmt.Sprintf(
@@ -117,6 +118,50 @@ func ConfigureStorage() (storage.HashableStorage, error) {
 	}
 
 	return st, nil
+}
+
+func ConfigureStorageForKubeStashFullBackup() (storage.HashableStorage, error) {
+	var rootWraps []storage.WrapRootFolder
+	if limiters.NetworkLimiter != nil {
+		rootWraps = append(rootWraps, func(prevFolder storage.Folder) (newFolder storage.Folder) {
+			return NewLimitedFolder(prevFolder, limiters.NetworkLimiter)
+		})
+	}
+	rootWraps = append(rootWraps, ConfigureStoragePrefix)
+
+	st, err := ConfigureStorageForSpecificConfigForKubeStash(viper.GetViper(), rootWraps...)
+	if err != nil {
+		return nil, err
+	}
+
+	return st, nil
+}
+
+func ConfigureStorageForSpecificConfigForKubeStash(
+	config *viper.Viper,
+	rootWraps ...storage.WrapRootFolder,
+) (storage.HashableStorage, error) {
+	skippedPrefixes := make([]string, 0)
+	for _, adapter := range StorageAdapters {
+		var prefix string
+		if _, ok := conf.GetWaleCompatibleSettingFrom(adapter.PrefixSettingKey(), config); !ok {
+			skippedPrefixes = append(skippedPrefixes, "WALG_"+adapter.PrefixSettingKey())
+			continue
+		} else {
+			prefix, ok = conf.GetWaleCompatibleSettingFrom(os.Getenv(kubeStashFullBackupPrefix), config)
+			if !ok {
+				skippedPrefixes = append(skippedPrefixes, "WALG_"+kubeStashFullBackupPrefix)
+				continue
+			}
+		}
+		settings := adapter.loadSettings(config)
+		st, err := adapter.configure(prefix, settings, rootWraps...)
+		if err != nil {
+			return nil, fmt.Errorf("configure storage with prefix %q: %w", prefix, err)
+		}
+		return st, nil
+	}
+	return nil, newUnconfiguredStorageError(skippedPrefixes)
 }
 
 func ConfigureStoragePrefix(folder storage.Folder) storage.Folder {
