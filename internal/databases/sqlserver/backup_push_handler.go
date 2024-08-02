@@ -14,7 +14,7 @@ import (
 	"github.com/wal-g/wal-g/utility"
 )
 
-func HandleBackupPush(dbnames []string, updateLatest bool) {
+func HandleBackupPush(dbnames []string, updateLatest, copyOnly bool) {
 	ctx, cancel := context.WithCancel(context.Background())
 	signalHandler := utility.NewSignalHandler(ctx, cancel, []os.Signal{syscall.SIGINT, syscall.SIGTERM})
 	defer func() { _ = signalHandler.Close() }()
@@ -56,7 +56,7 @@ func HandleBackupPush(dbnames []string, updateLatest bool) {
 	}
 	builtinCompression := blob.UseBuiltinCompression()
 	err = runParallel(func(i int) error {
-		return backupSingleDatabase(ctx, db, backupName, dbnames[i], builtinCompression)
+		return backupSingleDatabase(ctx, db, backupName, dbnames[i], builtinCompression, copyOnly)
 	}, len(dbnames), getDBConcurrency())
 	tracelog.ErrorLogger.FatalfOnError("overall backup failed: %v", err)
 
@@ -71,7 +71,7 @@ func HandleBackupPush(dbnames []string, updateLatest bool) {
 	tracelog.InfoLogger.Printf("backup finished")
 }
 
-func backupSingleDatabase(ctx context.Context, db *sql.DB, backupName string, dbname string, builtinCompression bool) error {
+func backupSingleDatabase(ctx context.Context, db *sql.DB, backupName string, dbname string, builtinCompression, copyOnlyBackup bool) error {
 	baseURL := getDatabaseBackupURL(backupName, dbname)
 	size, blobCount, err := estimateDBSize(db, dbname)
 	if err != nil {
@@ -84,6 +84,10 @@ func backupSingleDatabase(ctx context.Context, db *sql.DB, backupName string, db
 	if builtinCompression {
 		sql += ", COMPRESSION"
 	}
+	if copyOnlyBackup {
+		sql += ", COPY_ONLY"
+	}
+	fmt.Printf("SQL: %s\n", sql)
 	tracelog.InfoLogger.Printf("starting backup database [%s] to %s", dbname, urls)
 	tracelog.DebugLogger.Printf("SQL: %s", sql)
 	_, err = db.ExecContext(ctx, sql)
