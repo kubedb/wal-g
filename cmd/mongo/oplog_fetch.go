@@ -50,7 +50,7 @@ var oplogFetchCmd = &cobra.Command{
 		tracelog.ErrorLogger.FatalOnError(err)
 
 		// setup storage fetcher
-		oplogFetcher := stages.NewStorageFetcher(downloader, path)
+		oplogFetcher := stages.NewStorageFetcher(downloader, path, "")
 
 		// run worker cycle
 		err = mongo.HandleOplogReplay(ctx, since, until, oplogFetcher, oplogApplier)

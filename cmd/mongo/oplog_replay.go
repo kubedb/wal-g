@@ -3,12 +3,12 @@ package mongo
 import (
 	"context"
 	"encoding/json"
+	"github.com/wal-g/wal-g/internal/databases/mongo/shake"
 	"os"
 	"syscall"
 
 	"github.com/spf13/cobra"
 	"github.com/wal-g/tracelog"
-	"github.com/wal-g/wal-g/internal"
 	conf "github.com/wal-g/wal-g/internal/config"
 	"github.com/wal-g/wal-g/internal/databases/mongo"
 	"github.com/wal-g/wal-g/internal/databases/mongo/archive"
@@ -49,22 +49,18 @@ type oplogReplayRunArgs struct {
 
 	ignoreErrCodes map[string][]int32
 	mongodbURL     string
+	dbNode         string
 
 	oplogAlwaysUpsert    *bool
 	oplogApplicationMode *string
 }
 
 func buildOplogReplayRunArgs(cmdargs []string) (args oplogReplayRunArgs, err error) {
-	// resolve archiving settings
-	downloader, err := archive.NewStorageDownloader(archive.NewDefaultStorageSettings())
-	if err != nil {
-		return args, err
-	}
-	args.since, err = processArg(cmdargs[0], downloader)
+	args.since, err = models.TimestampFromTime(cmdargs[0])
 	if err != nil {
 		return
 	}
-	args.until, err = processArg(cmdargs[1], downloader)
+	args.until, err = models.TimestampFromTime(cmdargs[1])
 	if err != nil {
 		return
 	}
@@ -77,6 +73,11 @@ func buildOplogReplayRunArgs(cmdargs []string) (args oplogReplayRunArgs, err err
 	}
 
 	args.mongodbURL, err = conf.GetRequiredSetting(conf.MongoDBUriSetting)
+	if err != nil {
+		return
+	}
+
+	args.dbNode, err = conf.GetRequiredSetting(conf.MongoDBNode)
 	if err != nil {
 		return
 	}
@@ -97,24 +98,24 @@ func buildOplogReplayRunArgs(cmdargs []string) (args oplogReplayRunArgs, err err
 	return args, nil
 }
 
-func processArg(arg string, downloader *archive.StorageDownloader) (models.Timestamp, error) {
-	switch arg {
-	case internal.LatestString:
-		return downloader.LastKnownArchiveTS()
-	case LatestBackupString:
-		lastBackupName, err := downloader.LastBackupName()
-		if err != nil {
-			return models.Timestamp{}, err
-		}
-		backupMeta, err := downloader.BackupMeta(lastBackupName)
-		if err != nil {
-			return models.Timestamp{}, err
-		}
-		return models.TimestampFromBson(backupMeta.MongoMeta.BackupLastTS), nil
-	default:
-		return models.TimestampFromStr(arg)
-	}
-}
+//func processArg(arg string, downloader *archive.StorageDownloader) (models.Timestamp, error) {
+//	switch arg {
+//	case internal.LatestString:
+//		return downloader.LastKnownArchiveTS()
+//	case LatestBackupString:
+//		lastBackupName, err := downloader.LastBackupName()
+//		if err != nil {
+//			return models.Timestamp{}, err
+//		}
+//		backupMeta, err := downloader.BackupMeta(lastBackupName)
+//		if err != nil {
+//			return models.Timestamp{}, err
+//		}
+//		return models.TimestampFromBson(backupMeta.MongoMeta.BackupLastTS), nil
+//	default:
+//		return models.TimestampFromStr(arg)
+//	}
+//}
 
 func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 	tracelog.DebugLogger.Printf("starting replay with arguments: %+v", replayArgs)
@@ -139,7 +140,9 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 		return err
 	}
 
-	dbApplier := oplog.NewDBApplier(mongoClient, false, replayArgs.ignoreErrCodes)
+	filterList := shake.OplogFilterChain{new(shake.AutologousFilter), new(shake.NoopFilter)}
+	dbApplier := oplog.NewDBApplier(mongoClient, true, replayArgs.ignoreErrCodes, replayArgs.dbNode, filterList)
+
 	oplogApplier := stages.NewGenericApplier(dbApplier)
 
 	// set up storage downloader client
@@ -147,18 +150,24 @@ func runOplogReplay(ctx context.Context, replayArgs oplogReplayRunArgs) error {
 	if err != nil {
 		return err
 	}
+	downloader.SetNodeSpecificDownloader(replayArgs.dbNode)
+
 	// discover archive sequence to replay
 	archives, err := downloader.ListOplogArchives()
 	if err != nil {
 		return err
 	}
+
+	// update since and until. since = matched archive start ts , until = matched archiver end ts
+	replayArgs.since, replayArgs.until = archive.GetUpdatedBackupTimes(archives, replayArgs.since, replayArgs.until)
+	dbApplier.SetUntilTime(replayArgs.until)
 	path, err := archive.SequenceBetweenTS(archives, replayArgs.since, replayArgs.until)
 	if err != nil {
 		return err
 	}
 
 	// setup storage fetcher
-	oplogFetcher := stages.NewStorageFetcher(downloader, path)
+	oplogFetcher := stages.NewStorageFetcher(downloader, path, replayArgs.dbNode)
 
 	// run worker cycle
 	return mongo.HandleOplogReplay(ctx, replayArgs.since, replayArgs.until, oplogFetcher, oplogApplier)

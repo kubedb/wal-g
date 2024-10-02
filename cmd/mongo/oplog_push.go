@@ -2,7 +2,9 @@ package mongo
 
 import (
 	"context"
+	storageapi "kubestash.dev/apimachinery/apis/storage/v1alpha1"
 	"os"
+	"path"
 	"syscall"
 	"time"
 
@@ -19,6 +21,15 @@ import (
 	"github.com/wal-g/wal-g/internal/databases/mongo/stats"
 	"github.com/wal-g/wal-g/internal/webserver"
 	"github.com/wal-g/wal-g/utility"
+	"k8s.io/client-go/tools/clientcmd"
+	"kubedb.dev/apimachinery/pkg/factory"
+	controllerclient "sigs.k8s.io/controller-runtime/pkg/client"
+)
+
+var (
+	snapshotName      string
+	snapshotNamespace string
+	kubeconfig        string
 )
 
 // oplogPushCmd represents the continuous oplog archiving procedure
@@ -50,6 +61,12 @@ var oplogPushCmd = &cobra.Command{
 
 func init() {
 	cmd.AddCommand(oplogPushCmd)
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&snapshotName, "snapshot-name", "", "", "Name of the snapshot")
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&snapshotNamespace, "snapshot-namespace", "n", "", "Namespace of the snapshot")
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&kubeconfig, "kubeconfig", "", "", "Path of the kubeconfig")
 }
 
 func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplogPushStatsArgs) error {
@@ -59,8 +76,15 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	if err != nil {
 		return err
 	}
-	uplProvider.ChangeDirectory(models.OplogArchBasePath)
+	subDir := models.OplogArchBasePath
+	if pushArgs.dbProvider == string(storageapi.ProviderLocal) {
+		subDir = path.Join(pushArgs.dbPath, subDir)
+	}
+	uplProvider.ChangeDirectory(subDir)
 	uploader := archive.NewStorageUploader(uplProvider)
+	uploader.SetKubeClient(pushArgs.kubeClient)
+	uploader.SetSnapshot(snapshotName, snapshotNamespace)
+	uploader.SetDBNode(pushArgs.dbNode)
 
 	// set up mongodb client and oplog fetcher
 	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)
@@ -89,6 +113,8 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	if err != nil {
 		return err
 	}
+	downloader.SetNodeSpecificDownloader(uploader.GetDBNode())
+
 	since, err := discovery.ResolveStartingTS(ctx, downloader, mongoClient)
 	if err != nil {
 		return err
@@ -126,9 +152,13 @@ type oplogPushRunArgs struct {
 	archiveAfterSize   int
 	archiveTimeout     time.Duration
 	mongodbURL         string
+	dbNode             string
+	dbProvider         string
+	dbPath             string
 	primaryWait        bool
 	primaryWaitTimeout time.Duration
 	lwUpdate           time.Duration
+	kubeClient         controllerclient.Client
 }
 
 func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
@@ -147,6 +177,15 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 		return
 	}
 
+	args.dbNode, err = conf.GetRequiredSetting(conf.MongoDBNode)
+	if err != nil {
+		return
+	}
+
+	args.dbProvider = conf.GetNonRequiredSetting(conf.MongoDBProvider)
+
+	args.dbPath = conf.GetNonRequiredSetting(conf.MongoDBPath)
+
 	args.primaryWait, err = conf.GetBoolSettingDefault(conf.OplogPushWaitForBecomePrimary, false)
 	if err != nil {
 		return
@@ -160,7 +199,21 @@ func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
 	}
 
 	args.lwUpdate, err = conf.GetDurationSetting(conf.MongoDBLastWriteUpdateInterval)
-	return
+	if err != nil {
+		return
+	}
+
+	clientConfig, err := clientcmd.BuildConfigFromFlags("", kubeconfig)
+	if err != nil {
+		return
+	}
+
+	args.kubeClient, err = factory.NewUncachedClient(clientConfig)
+	if err != nil {
+		return
+	}
+
+	return args, err
 }
 
 type oplogPushStatsArgs struct {
