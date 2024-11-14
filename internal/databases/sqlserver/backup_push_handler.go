@@ -71,7 +71,8 @@ func HandleBackupPush(dbnames []string, updateLatest, copyOnly bool) {
 	tracelog.InfoLogger.Printf("backup finished")
 }
 
-func backupSingleDatabase(ctx context.Context, db *sql.DB, backupName string, dbname string, builtinCompression, copyOnlyBackup bool) error {
+func backupSingleDatabase(ctx context.Context, db *sql.DB, backupName string,
+	dbname string, builtinCompression, copyOnlyBackup bool) error {
 	baseURL := getDatabaseBackupURL(backupName, dbname)
 	size, blobCount, err := estimateDBSize(db, dbname)
 	if err != nil {
