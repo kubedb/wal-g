@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -222,10 +223,13 @@ type StorageUploader struct {
 	crypter crypto.Crypter // usages only in UploadOplogArchive
 	buf     *bytes.Buffer
 
-	kubeClient        controllerruntime.Client
-	snapshotName      string
-	snapshotNamespace string
-	dbNode            string
+	kubeClient controllerruntime.Client
+	dbNode     string
+
+	snapshotName                      string
+	snapshotNamespace                 string
+	snapshotSuccessfulLogHistoryLimit int
+	snapshotFailedLogHistoryLimit     int
 }
 
 // NewStorageUploader builds mongodb uploader.
@@ -238,9 +242,16 @@ func (su *StorageUploader) SetKubeClient(client controllerruntime.Client) {
 	su.kubeClient = client
 }
 
-func (su *StorageUploader) SetSnapshot(name, namespace string) {
+func (su *StorageUploader) SetupSnapshot(name, namespace, successfulLog, failedLog string) error {
+	var err error
 	su.snapshotName = name
 	su.snapshotNamespace = namespace
+	su.snapshotSuccessfulLogHistoryLimit, err = strconv.Atoi(successfulLog)
+	if err != nil {
+		return err
+	}
+	su.snapshotFailedLogHistoryLimit, err = strconv.Atoi(failedLog)
+	return err
 }
 
 func (su *StorageUploader) SetDBNode(node string) {
@@ -250,8 +261,9 @@ func (su *StorageUploader) GetDBNode() string {
 	return su.dbNode
 }
 
-func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp) error {
+func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp, uploadErr error, arch models.Archive) error {
 	var snapshot storageapi.Snapshot
+	archFileName := arch.DBNodeSpecificFileName(su.dbNode)
 	err := su.kubeClient.Get(context.TODO(), controllerruntime.ObjectKey{
 		Namespace: su.snapshotNamespace,
 		Name:      su.snapshotName,
@@ -272,14 +284,29 @@ func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp) erro
 				in.Status.Components = make(map[string]storageapi.Component)
 			}
 			if _, ok := in.Status.Components[compName]; !ok {
-				walSegments := make([]storageapi.WalSegment, 1)
-				walSegments[0].Start = &metav1.Time{Time: time.Unix(int64(firstTS.ToBsonTS().T), 0)}
+
+				logStats := new(storageapi.LogStats)
+
+				if uploadErr != nil {
+					su.updateLogStatsLog(logStats, fmt.Errorf("failed to push archiver %s. error: %w", archFileName, uploadErr).Error(), arch)
+				} else {
+					su.updateLogStatsLog(logStats, "", arch)
+					startTime := (&metav1.Time{Time: time.Unix(int64(firstTS.ToBsonTS().T), 0)}).String()
+					logStats.Start = &startTime
+				}
 				in.Status.Components[compName] = storageapi.Component{
-					WalSegments: walSegments,
+					LogStats: logStats,
 				}
 			}
 			component := in.Status.Components[compName]
-			component.WalSegments[0].End = &metav1.Time{Time: time.Unix(int64(lastTS.ToBsonTS().T), 0)}
+
+			if uploadErr != nil {
+				su.updateLogStatsLog(component.LogStats, fmt.Errorf("failed to push archiver %s. error: %w", archFileName, uploadErr).Error(), arch)
+			} else {
+				su.updateLogStatsLog(component.LogStats, "", arch)
+				endTime := (&metav1.Time{Time: time.Unix(int64(lastTS.ToBsonTS().T), 0)}).String()
+				component.LogStats.End = &endTime
+			}
 			in.Status.Components[compName] = component
 
 			return in
@@ -288,13 +315,35 @@ func (su *StorageUploader) updateSnapshot(firstTS, lastTS models.Timestamp) erro
 	return err
 }
 
+func (su *StorageUploader) updateLogStatsLog(logStats *storageapi.LogStats, errMsg string, arch models.Archive) {
+	// No error found while uploading arch
+	if errMsg == "" {
+		logStats.TotalSucceededCount++
+		logStats.LastSucceededStats = append(logStats.LastSucceededStats, getLog(errMsg, arch))
+		if len(logStats.LastSucceededStats) > su.snapshotSuccessfulLogHistoryLimit {
+			logStats.LastSucceededStats = logStats.LastSucceededStats[1:]
+		}
+	} else {
+		logStats.TotalFailedCount++
+		logStats.LastFailedStats = append(logStats.LastFailedStats, getLog(errMsg, arch))
+		if len(logStats.LastFailedStats) > su.snapshotFailedLogHistoryLimit {
+			logStats.LastFailedStats = logStats.LastFailedStats[1:]
+		}
+	}
+}
+
+func getLog(msg string, arch models.Archive) storageapi.Log {
+	startTime := (&metav1.Time{Time: time.Unix(int64(arch.Start.ToBsonTS().T), 0)}).String()
+	endTime := (&metav1.Time{Time: time.Unix(int64(arch.End.ToBsonTS().T), 0)}).String()
+	return storageapi.Log{
+		Start: &startTime,
+		End:   &endTime,
+		Error: msg,
+	}
+}
+
 // UploadOplogArchive compresses a stream and uploads it with given archive name.
 func (su *StorageUploader) UploadOplogArchive(ctx context.Context, stream io.Reader, firstTS, lastTS models.Timestamp) error {
-	err := su.updateSnapshot(firstTS, lastTS)
-	if err != nil {
-		return fmt.Errorf("failed to update snapshot: %w", err)
-	}
-
 	arch, err := models.NewArchive(firstTS, lastTS, su.Compression().FileExtension(), models.ArchiveTypeOplog)
 	if err != nil {
 		return fmt.Errorf("can not build archive: %w", err)
@@ -308,7 +357,12 @@ func (su *StorageUploader) UploadOplogArchive(ctx context.Context, stream io.Rea
 	}
 	fileName := arch.DBNodeSpecificFileName(su.dbNode)
 	// providing io.ReaderAt+io.ReadSeeker to s3 upload enables buffer pool usage
-	return su.Upload(ctx, fileName, bytes.NewReader(su.buf.Bytes()))
+	uploadErr := su.Upload(ctx, fileName, bytes.NewReader(su.buf.Bytes()))
+	err = su.updateSnapshot(firstTS, lastTS, uploadErr, arch)
+	if err != nil {
+		return fmt.Errorf("failed to update snapshot: %w\nerror from uploading archiver: %w", err, uploadErr)
+	}
+	return uploadErr
 }
 
 // UploadGap uploads mark indicating archiving gap.
