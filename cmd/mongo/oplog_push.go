@@ -27,9 +27,11 @@ import (
 )
 
 var (
-	snapshotName      string
-	snapshotNamespace string
-	kubeconfig        string
+	kubeconfig                        string
+	snapshotName                      string
+	snapshotNamespace                 string
+	snapshotSuccessfulLogHistoryLimit string
+	snapshotFailedLogHistoryLimit     string
 )
 
 // oplogPushCmd represents the continuous oplog archiving procedure
@@ -60,13 +62,19 @@ var oplogPushCmd = &cobra.Command{
 }
 
 func init() {
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&kubeconfig, "kubeconfig", "", "", "Path of the kubeconfig")
 	cmd.AddCommand(oplogPushCmd)
 	oplogPushCmd.PersistentFlags().StringVarP(
 		&snapshotName, "snapshot-name", "", "", "Name of the snapshot")
 	oplogPushCmd.PersistentFlags().StringVarP(
 		&snapshotNamespace, "snapshot-namespace", "n", "", "Namespace of the snapshot")
 	oplogPushCmd.PersistentFlags().StringVarP(
-		&kubeconfig, "kubeconfig", "", "", "Path of the kubeconfig")
+		&snapshotSuccessfulLogHistoryLimit, "snapshot-successful-log-history-limit", "", "",
+		"Maximum number of successful log history in snapshot")
+	oplogPushCmd.PersistentFlags().StringVarP(
+		&snapshotFailedLogHistoryLimit, "snapshot-failed-log-history-limit", "", "",
+		"Maximum number of failed log history in snapshot")
 }
 
 func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplogPushStatsArgs) error {
@@ -83,8 +91,11 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 	uplProvider.ChangeDirectory(subDir)
 	uploader := archive.NewStorageUploader(uplProvider)
 	uploader.SetKubeClient(pushArgs.kubeClient)
-	uploader.SetSnapshot(snapshotName, snapshotNamespace)
 	uploader.SetDBNode(pushArgs.dbNode)
+	err = uploader.SetupSnapshot(snapshotName, snapshotNamespace, snapshotSuccessfulLogHistoryLimit, snapshotFailedLogHistoryLimit)
+	if err != nil {
+		return err
+	}
 
 	// set up mongodb client and oplog fetcher
 	mongoClient, err := client.NewMongoClient(ctx, pushArgs.mongodbURL)
@@ -149,16 +160,18 @@ func runOplogPush(ctx context.Context, pushArgs oplogPushRunArgs, statsArgs oplo
 }
 
 type oplogPushRunArgs struct {
-	archiveAfterSize   int
-	archiveTimeout     time.Duration
-	mongodbURL         string
-	dbNode             string
-	dbProvider         string
-	dbPath             string
-	primaryWait        bool
-	primaryWaitTimeout time.Duration
-	lwUpdate           time.Duration
-	kubeClient         controllerclient.Client
+	archiveAfterSize     int
+	archiveTimeout       time.Duration
+	mongodbURL           string
+	dbNode               string
+	dbProvider           string
+	dbPath               string
+	successfulLogHistory string
+	failedLogHistory     string
+	primaryWait          bool
+	primaryWaitTimeout   time.Duration
+	lwUpdate             time.Duration
+	kubeClient           controllerclient.Client
 }
 
 func buildOplogPushRunArgs() (args oplogPushRunArgs, err error) {
