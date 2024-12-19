@@ -6,8 +6,8 @@ toolchain go1.23.4
 
 require (
 	cloud.google.com/go/storage v1.40.0
-	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.12.0
-	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.6.0
+	github.com/Azure/azure-sdk-for-go/sdk/azcore v1.16.0
+	github.com/Azure/azure-sdk-for-go/sdk/azidentity v1.7.0
 	github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v1.3.1
 	github.com/Azure/go-autorest/autorest v0.11.29
 	github.com/ProtonMail/go-crypto v0.0.0-20230426101702-58e86b294756
@@ -56,7 +56,7 @@ require (
 	go.mongodb.org/mongo-driver v1.9.1
 	golang.org/x/crypto v0.31.0
 	golang.org/x/mod v0.19.0
-	golang.org/x/net v0.32.0
+	golang.org/x/net v0.33.0
 	golang.org/x/sync v0.10.0
 	golang.org/x/sys v0.28.0
 	golang.org/x/time v0.5.0
@@ -68,7 +68,7 @@ require (
 	k8s.io/client-go v0.30.3
 	kmodules.xyz/client-go v0.30.42
 	kubedb.dev/apimachinery v0.49.0
-	kubestash.dev/apimachinery v0.13.0
+	kubestash.dev/apimachinery v0.14.1-0.20241217124656-8f481a8c5a0d
 	sigs.k8s.io/controller-runtime v0.18.4
 )
 
@@ -79,7 +79,7 @@ require (
 	cloud.google.com/go/compute/metadata v0.5.0 // indirect
 	cloud.google.com/go/iam v1.1.7 // indirect
 	filippo.io/edwards25519 v1.1.0 // indirect
-	github.com/Azure/azure-sdk-for-go/sdk/internal v1.9.0 // indirect
+	github.com/Azure/azure-sdk-for-go/sdk/internal v1.10.0 // indirect
 	github.com/Azure/go-autorest v14.2.0+incompatible // indirect
 	github.com/Azure/go-autorest/autorest/adal v0.9.23 // indirect
 	github.com/Azure/go-autorest/autorest/date v0.3.0 // indirect
@@ -98,7 +98,7 @@ require (
 	github.com/coreos/go-semver v0.3.1 // indirect
 	github.com/cucumber/gherkin-go/v19 v19.0.3 // indirect
 	github.com/cucumber/messages-go/v16 v16.0.1 // indirect
-	github.com/cyphar/filepath-securejoin v0.2.4 // indirect
+	github.com/cyphar/filepath-securejoin v0.3.4 // indirect
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc // indirect
 	github.com/distribution/reference v0.6.0 // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -246,3 +246,5 @@ require (
 	sigs.k8s.io/yaml v1.4.0 // indirect
 	stash.appscode.dev/apimachinery v0.36.0 // indirect
 )
+
+replace github.com/Azure/azure-sdk-for-go/sdk/storage/azblob => github.com/Azure/azure-sdk-for-go/sdk/storage/azblob v0.4.1
