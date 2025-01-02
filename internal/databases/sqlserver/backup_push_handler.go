@@ -88,8 +88,10 @@ func backupSingleDatabase(ctx context.Context, db *sql.DB, backupName string,
 	if copyOnlyBackup {
 		sql += ", COPY_ONLY"
 	}
+
 	tracelog.InfoLogger.Printf("starting backup database [%s] to %s", dbname, urls)
 	tracelog.DebugLogger.Printf("SQL: %s", sql)
+	tracelog.InfoLogger.Printf("SQL: %s", sql)
 	_, err = db.ExecContext(ctx, sql)
 	if err != nil {
 		tracelog.ErrorLogger.Printf("database [%s] backup failed: %#v", dbname, err)
