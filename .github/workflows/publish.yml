@@ -15,7 +15,7 @@ jobs:
       matrix:
         db: [fdb, gp, mongo, mysql, pg, redis, sqlserver]
     steps:
-      - uses: actions/checkout@v1
+      - uses: actions/checkout@v6
 
       - name: Set up Go 1.21
         uses: actions/setup-go@v1
