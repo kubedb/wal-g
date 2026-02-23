@@ -2,6 +2,8 @@ package mongo
 
 import (
 	"context"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/klog/v2"
 	storageapi "kubestash.dev/apimachinery/apis/storage/v1alpha1"
 	"os"
 	"path"
@@ -56,6 +58,11 @@ var oplogPushCmd = &cobra.Command{
 		if err != nil {
 			return
 		}
+		rt, err := GetNewRetention(ctx, &metav1.ObjectMeta{Name: snapshotName, Namespace: snapshotNamespace})
+		if err != nil {
+			klog.Infof("Failed to buid the retention,err: %s", err)
+		}
+		go rt.Run(ctx)
 
 		err = runOplogPush(ctx, pushArgs, statsArgs)
 	},

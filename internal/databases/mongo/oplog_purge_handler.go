@@ -58,3 +58,25 @@ func HandleOplogPurge(downloader archive.Downloader, purger archive.Purger, reta
 	}
 	return nil
 }
+
+func HandleOplogPurgeForKubeDB(downloader archive.Downloader, purger archive.Purger, retainAfter *time.Time, dryRun bool, dbName string, nameamespace string) (int, error) {
+	archives, err := downloader.ListOplogArchives()
+	if err != nil {
+		return 0, fmt.Errorf("can not load oplog archives: %+v", err)
+	}
+	if len(archives) == 0 {
+		return 0, nil
+	}
+
+	retainArchivesAfterTS := models.TimeToTimestamp(retainAfter)
+
+	purgeArchives := archive.SelectPurgingOplogArchivesForKubeDB(archives, &retainArchivesAfterTS)
+	tracelog.DebugLogger.Printf("Oplog archives selected to be deleted: %v", purgeArchives)
+	if !dryRun {
+		if err := purger.DeleteOplogArchivesForKubeDB(purgeArchives); err != nil {
+			return 0, fmt.Errorf("can not purge oplog archives: %+v", err)
+		}
+		tracelog.InfoLogger.Printf("Oplog archives were purged: %d", len(purgeArchives))
+	}
+	return len(purgeArchives), nil
+}

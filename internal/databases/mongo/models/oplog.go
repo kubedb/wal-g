@@ -149,3 +149,10 @@ type IsMaster struct {
 	IsMaster  bool
 	LastWrite IsMasterLastWrite
 }
+
+func TimeToTimestamp(t *time.Time) Timestamp {
+	return Timestamp{
+		TS:  uint32(t.Unix()), // seconds since epoch
+		Inc: 0,                // you can adjust Inc if needed
+	}
+}

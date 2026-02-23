@@ -53,6 +53,7 @@ type Purger interface {
 	DeleteBackups(backups []*models.Backup) error
 	DeleteGarbage(garbage []string) error
 	DeleteOplogArchives(archives []models.Archive) error
+	DeleteOplogArchivesForKubeDB(archives []models.Archive) error
 }
 
 // StorageSettings defines storage relative paths
@@ -413,6 +414,7 @@ func (su *StorageUploader) UploadBackup(stream io.Reader, cmd internal.ErrWaiter
 type StoragePurger struct {
 	oplogsFolder  storage.Folder
 	backupsFolder storage.Folder
+	dbNode        string
 }
 
 // NewStoragePurger builds mongodb StoragePurger.
@@ -424,6 +426,12 @@ func NewStoragePurger(opts StorageSettings) (*StoragePurger, error) {
 
 	return &StoragePurger{oplogsFolder: st.RootFolder().GetSubFolder(opts.oplogsPath),
 		backupsFolder: st.RootFolder().GetSubFolder(opts.backupsPath)}, nil
+}
+func (sd *StoragePurger) SetNodeSpecificPurger(node string) {
+	sd.dbNode = node
+}
+func (sd *StoragePurger) GetNodeSpecificPurger() string {
+	return sd.dbNode
 }
 
 // DeleteBackups purges given backups files
@@ -443,6 +451,14 @@ func (sp *StoragePurger) DeleteOplogArchives(archives []models.Archive) error {
 	oplogKeys := make([]string, 0, len(archives))
 	for _, arch := range archives {
 		oplogKeys = append(oplogKeys, arch.Filename())
+	}
+	tracelog.DebugLogger.Printf("Oplog keys will be deleted: %+v\n", oplogKeys)
+	return sp.oplogsFolder.DeleteObjects(oplogKeys)
+}
+func (sp *StoragePurger) DeleteOplogArchivesForKubeDB(archives []models.Archive) error {
+	oplogKeys := make([]string, 0, len(archives))
+	for _, arch := range archives {
+		oplogKeys = append(oplogKeys, arch.DBNodeSpecificFileName(sp.dbNode))
 	}
 	tracelog.DebugLogger.Printf("Oplog keys will be deleted: %+v\n", oplogKeys)
 	return sp.oplogsFolder.DeleteObjects(oplogKeys)

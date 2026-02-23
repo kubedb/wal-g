@@ -213,3 +213,21 @@ func SelectPurgingOplogArchives(archives []models.Archive,
 	}
 	return purgeArchives
 }
+
+func SelectPurgingOplogArchivesForKubeDB(archives []models.Archive,
+	retainAfterTS *models.Timestamp) []models.Archive {
+	var purgeArchives []models.Archive
+	var arch models.Archive
+	for i := range archives {
+		arch = archives[i]
+
+		if retainAfterTS != nil && models.LessTS(*retainAfterTS, arch.End) { // TODO: check ts is set
+			tracelog.DebugLogger.Printf(
+				"Keeping oplog archive due to retain timestamp (%+v): %s", retainAfterTS, arch.Filename())
+			continue
+		}
+
+		purgeArchives = append(purgeArchives, arch)
+	}
+	return purgeArchives
+}
