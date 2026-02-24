@@ -66,6 +66,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.34.3
 	k8s.io/client-go v0.34.3
+	k8s.io/klog/v2 v2.130.1
 	kmodules.xyz/client-go v0.34.2
 	kubedb.dev/apimachinery v0.61.0-rc.0
 	kubestash.dev/apimachinery v0.23.1-0.20260216083634-e6004c6a9c6f
@@ -252,7 +253,6 @@ require (
 	k8s.io/api v0.34.3 // indirect
 	k8s.io/apiextensions-apiserver v0.34.3 // indirect
 	k8s.io/apiserver v0.34.3 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-aggregator v0.34.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/metrics v0.34.3 // indirect

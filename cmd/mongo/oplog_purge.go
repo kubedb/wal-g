@@ -19,6 +19,7 @@ import (
 	conf "github.com/wal-g/wal-g/internal/config"
 	"github.com/wal-g/wal-g/internal/databases/mongo"
 	"github.com/wal-g/wal-g/internal/databases/mongo/archive"
+	"k8s.io/klog/v2/klogr"
 	archiverv1alpha1 "kubedb.dev/apimachinery/apis/archiver/v1alpha1"
 	ctrl "sigs.k8s.io/controller-runtime"
 	runtime_client "sigs.k8s.io/controller-runtime/pkg/client"
@@ -42,6 +43,7 @@ type Retention struct {
 func GetNewRetention(ctx context.Context, snapshotRef *metav1.ObjectMeta) (*Retention, error) {
 	var err error
 	rt := &Retention{}
+	ctrl.SetLogger(klogr.New()) // nolint:staticcheck
 	rt.logger = ctrl.Log.WithName("wal-log deletion")
 	if err = setClientToRetention(rt); err != nil {
 		return nil, fmt.Errorf("failed to set client to rt: %w", err)
@@ -160,7 +162,6 @@ func (rt *Retention) runOplogPurgeForKubeDB(ctx context.Context, pitrAfterTime *
 		return err
 	}
 	downloader.SetNodeSpecificDownloader(pushArgs.dbNode)
-	klog.Infof("%s", pushArgs.dbNode)
 	purger, err := archive.NewStoragePurger(archive.NewDefaultStorageSettings())
 	if err != nil {
 		return err
@@ -169,6 +170,7 @@ func (rt *Retention) runOplogPurgeForKubeDB(ctx context.Context, pitrAfterTime *
 	count, err := mongo.HandleOplogPurgeForKubeDB(downloader, purger, pitrAfterTime, dryRun, rt.db.Name, rt.db.Namespace)
 	klog.Infof("Deleted Count: %d", count)
 	compName := "wal"
+	compName = compName + "-" + pushArgs.dbNode
 
 	if err == nil {
 		updateRetentionStats(ctx, rt, int64(count), "", compName)
