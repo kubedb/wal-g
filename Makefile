@@ -19,7 +19,7 @@ MONGO_VERSION ?= "4.2.8"
 GOLANGCI_LINT_VERSION ?= "v1.52.2"
 REDIS_VERSION ?= "5.0.8"
 TOOLS_MOD_DIR := ./internal/tools
-REGISTRY := puloksaha
+REGISTRY := sayedppqq
 
 BUILD_TAGS:=
 
