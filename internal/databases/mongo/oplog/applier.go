@@ -3,16 +3,18 @@ package oplog
 import (
 	"context"
 	"fmt"
+	"io"
+	"strings"
+
 	"github.com/mongodb/mongo-tools/common/db"
 	"github.com/mongodb/mongo-tools/common/txn"
 	"github.com/mongodb/mongo-tools/common/util"
 	"github.com/wal-g/tracelog"
 	"github.com/wal-g/wal-g/internal/databases/mongo/client"
 	"github.com/wal-g/wal-g/internal/databases/mongo/models"
+	"github.com/wal-g/wal-g/internal/databases/mongo/shake"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
-	"io"
-	"strings"
 )
 
 const NamespaceNotFoundError int32 = 26
@@ -82,6 +84,9 @@ type DBApplier struct {
 	lastOpTime            models.OpTime
 	catchUp               bool
 	initMongo             bool
+	until                 models.Timestamp
+	dbNode                string
+	filterList            shake.OplogFilterChain
 }
 
 type DBApplierArgs struct {
@@ -93,7 +98,7 @@ type DBApplierArgs struct {
 }
 
 // NewDBApplier builds DBApplier with given args.
-func NewDBApplier(m client.MongoDriver, args DBApplierArgs) *DBApplier {
+func NewDBApplier(m client.MongoDriver, args DBApplierArgs, node string, filterList shake.OplogFilterChain) *DBApplier {
 	return &DBApplier{
 		db:                    m,
 		txnBuffer:             txn.NewBuffer(),
@@ -102,6 +107,8 @@ func NewDBApplier(m client.MongoDriver, args DBApplierArgs) *DBApplier {
 		catchUp:               args.Reconfig,
 		applyIgnoreErrorCodes: args.IgnoreErrCodes,
 		initMongo:             args.InitMongo,
+		dbNode:                node,
+		filterList:            filterList,
 	}
 }
 
@@ -115,9 +122,15 @@ func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
 		return fmt.Errorf("can not unmarshal oplog entry: %w", err)
 	}
 
-	if !ap.catchUp {
-		if err := ap.shouldSkip(&op); err != nil {
-			tracelog.DebugLogger.Printf("skipping op %+v due to: %+v", op, err)
+	tracelog.InfoLogger.Printf("op %+v: op time %v, until time %v", op, op.Timestamp.T, ap.until.TS)
+
+	if op.Timestamp.T > ap.until.TS {
+		tracelog.InfoLogger.Printf("skipping op %+v due to: op time %v, until time %v", op, op.Timestamp.T, ap.until.TS)
+		return nil
+	}
+
+	if ap.dbNode != "configsvr" {
+		if ap.filterList.IterateFilter(&op) {
 			return nil
 		}
 	}
@@ -145,6 +158,10 @@ func (ap *DBApplier) Apply(ctx context.Context, opr models.Oplog) error {
 	return nil
 }
 
+func (ap *DBApplier) SetUntilTime(until models.Timestamp) {
+	ap.until = until
+}
+
 func (ap *DBApplier) Close(ctx context.Context) error {
 	if ap.catchUp {
 		if err := ap.db.ChangeOplogLastTimestamp(ctx, ap.lastOpTime); err != nil {
@@ -163,37 +180,15 @@ func (ap *DBApplier) Close(ctx context.Context) error {
 	return nil
 }
 
-func (ap *DBApplier) shouldSkip(oplog *db.Oplog) error {
-	if oplog.Namespace == "n" {
-		return fmt.Errorf("noop op")
-	}
-
-	if oplog.Operation == "c" && len(oplog.Object) > 0 {
-		if oplog.Object[0].Key == "startIndexBuild" ||
-			oplog.Object[0].Key == "abortIndexBuild" {
-			/* See
-			https://github.com/mongodb/docs/blob/37910658a80979a82ceabf792618d96976e1bfeb/source/core/index-creation.txt#L183
-			for startIndexBuild
-			and
-			https://github.com/mongodb/docs/blob/37910658a80979a82ceabf792618d96976e1bfeb/source/core/index-creation.txt#L202
-			for abortIndexBuild details
-			*/
-			return fmt.Errorf("%s operation is not supported in applyOps mode", oplog.Object[0].Key)
-		}
-	}
-
-	if !isOpAllowedInconfigDB(oplog) {
-		return fmt.Errorf("config database op")
-	}
-
-	return nil
-}
-
 // shouldIgnore checks if error should be ignored
 func (ap *DBApplier) shouldIgnore(op string, err error) bool {
 	ce, ok := err.(mongo.CommandError)
 	if !ok {
 		return false
+	}
+
+	if mongo.IsDuplicateKeyError(err) {
+		return true
 	}
 
 	if ce.Code == NamespaceNotFoundError && ap.IsPartial() {

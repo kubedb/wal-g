@@ -3,6 +3,7 @@ package mongo
 import (
 	"context"
 
+	"github.com/wal-g/tracelog"
 	"github.com/wal-g/wal-g/internal/databases/mongo/binary"
 	"github.com/wal-g/wal-g/internal/databases/mongo/models"
 	"github.com/wal-g/wal-g/internal/databases/mongo/stages"
@@ -13,6 +14,7 @@ func HandleOplogReplay(ctx context.Context,
 	until models.Timestamp,
 	fetcher stages.BetweenFetcher,
 	applier stages.Applier) error {
+	tracelog.InfoLogger.Printf("Since: %s, Until: %s", since, until)
 	return binary.HandleOplogReplay(ctx, since, until, fetcher, applier)
 }
 

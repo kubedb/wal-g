@@ -10,9 +10,7 @@ import (
 	"github.com/cenkalti/backoff"
 	"github.com/pkg/errors"
 	"github.com/wal-g/tracelog"
-	"github.com/wal-g/wal-g/internal"
 	conf "github.com/wal-g/wal-g/internal/config"
-	"github.com/wal-g/wal-g/internal/databases/mongo/archive"
 	"github.com/wal-g/wal-g/internal/databases/mongo/models"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -475,6 +473,7 @@ type ReplyOplogConfig struct {
 	Since models.Timestamp
 	Until models.Timestamp
 
+	DBNode         string
 	IgnoreErrCodes map[string][]int32
 
 	OplogAlwaysUpsert    *bool
@@ -526,16 +525,11 @@ func NewReplyOplogConfig(
 	var err error
 	roConfig.HasPitr = true
 
-	// resolve archiving settings
-	downloader, err := archive.NewStorageDownloader(archive.NewDefaultStorageSettings())
+	roConfig.Since, err = models.TimestampFromTime(sincePitrStr)
 	if err != nil {
 		return roConfig, err
 	}
-	roConfig.Since, err = processTimestamp(sincePitrStr, downloader)
-	if err != nil {
-		return roConfig, err
-	}
-	roConfig.Until, err = processTimestamp(untilPitrStr, downloader)
+	roConfig.Until, err = models.TimestampFromTime(untilPitrStr)
 	if err != nil {
 		return roConfig, err
 	}
@@ -561,29 +555,8 @@ func NewReplyOplogConfig(
 	roConfig.Partial = partial
 	roConfig.WithCatchUpReconfig = withCatchUpReconfig
 	roConfig.MinimalConfigPath = minimalConfigPath
-
+	roConfig.DBNode, err = conf.GetRequiredSetting(conf.MongoDBNode)
 	return roConfig, err
-}
-
-func processTimestamp(arg string, downloader *archive.StorageDownloader) (models.Timestamp, error) {
-	switch arg {
-	case internal.LatestString:
-		return downloader.LastKnownArchiveTS()
-	case LatestBackupString:
-		lastBackupName, err := downloader.LastBackupName()
-		if err != nil {
-			return models.Timestamp{}, err
-		}
-		backupMeta, err := downloader.BackupMeta(lastBackupName)
-		if err != nil {
-			return models.Timestamp{}, err
-		}
-		return models.TimestampFromBson(backupMeta.MongoMeta.BackupLastTS), nil
-	case LatestOnReplica:
-		return models.Timestamp{}, nil
-	default:
-		return models.TimestampFromStr(arg)
-	}
 }
 
 func NewMongoCfgConfig(shardConnectionStrings []string) (MongoCfgConfig, error) {

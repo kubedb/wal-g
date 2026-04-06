@@ -9,6 +9,7 @@ import (
 	"github.com/wal-g/wal-g/internal/databases/mongo/client"
 	"github.com/wal-g/wal-g/internal/databases/mongo/models"
 	"github.com/wal-g/wal-g/internal/databases/mongo/oplog"
+	"github.com/wal-g/wal-g/internal/databases/mongo/shake"
 	"github.com/wal-g/wal-g/internal/databases/mongo/stages"
 	"golang.org/x/sync/errgroup"
 )
@@ -52,13 +53,15 @@ func RunOplogReplay(ctx context.Context, mongodbURL string, replayArgs ReplyOplo
 		return err
 	}
 
+	filterList := shake.OplogFilterChain{new(shake.AutologousFilter), new(shake.NoopFilter)}
 	dbApplier := oplog.NewDBApplier(mongoClient, oplog.DBApplierArgs{
 		PreserveUUID:   false,
 		Partial:        replayArgs.Partial,
 		InitMongo:      initMongo,
 		Reconfig:       replayArgs.WithCatchUpReconfig,
 		IgnoreErrCodes: replayArgs.IgnoreErrCodes,
-	})
+	}, replayArgs.DBNode, filterList)
+	dbApplier.SetUntilTime(replayArgs.Until)
 	oplogApplier := stages.NewGenericApplier(dbApplier)
 
 	// set up storage downloader client
@@ -66,6 +69,7 @@ func RunOplogReplay(ctx context.Context, mongodbURL string, replayArgs ReplyOplo
 	if err != nil {
 		return err
 	}
+	downloader.SetNodeSpecificDownloader(replayArgs.DBNode)
 
 	path, err := resolveOplogReplaySequence(downloader, replayArgs.Since, replayArgs.Until)
 	if err != nil {
@@ -73,7 +77,7 @@ func RunOplogReplay(ctx context.Context, mongodbURL string, replayArgs ReplyOplo
 	}
 
 	// setup storage fetcher
-	oplogFetcher := stages.NewStorageFetcher(downloader, path)
+	oplogFetcher := stages.NewStorageFetcher(downloader, path, replayArgs.DBNode)
 
 	// run worker cycle
 	return HandleOplogReplay(ctx, replayArgs.Since, replayArgs.Until, oplogFetcher, oplogApplier)
@@ -91,6 +95,8 @@ func resolveOplogReplaySequence(
 	if err != nil {
 		return nil, err
 	}
+
+	since, until = archive.GetUpdatedBackupTimes(archives, since, until)
 	path, err := archive.SequenceBetweenTS(archives, since, until)
 	// if the start and end found in the archives, return the sequence
 	if err == nil {
