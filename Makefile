@@ -180,6 +180,17 @@ mongo_build: $(CMD_FILES) $(PKG_FILES)
 mongo_install: mongo_build
 	mv $(MAIN_MONGO_PATH)/wal-g $(GOBIN)/wal-g
 
+# OCI image for KubeDB releases (multi-stage build; default DB target is mongo).
+.PHONY: kubedb_image
+KUBEDB_DB ?= mongo
+KUBEDB_GO_VERSION ?= 1.25.8
+kubedb_image:
+	docker build -f docker/kubedb/Dockerfile \
+		--build-arg DB=$(KUBEDB_DB) \
+		--build-arg GO_VERSION=$(KUBEDB_GO_VERSION) \
+		--build-arg BUILD_TAGS="$(BUILD_TAGS)" \
+		-t wal-g-$(KUBEDB_DB):kubedb .
+
 mongo_features:
 	set -e
 	make go_deps
