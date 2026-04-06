@@ -183,13 +183,25 @@ mongo_install: mongo_build
 # OCI image for KubeDB releases (multi-stage build; default DB target is mongo).
 .PHONY: kubedb_image
 KUBEDB_DB ?= mongo
-KUBEDB_GO_VERSION ?= 1.25.8
+KUBEDB_GO_VERSION ?= 1.26
 kubedb_image:
 	docker build -f docker/kubedb/Dockerfile \
 		--build-arg DB=$(KUBEDB_DB) \
 		--build-arg GO_VERSION=$(KUBEDB_GO_VERSION) \
 		--build-arg BUILD_TAGS="$(BUILD_TAGS)" \
-		-t wal-g-$(KUBEDB_DB):kubedb .
+		-t ghcr.io/arnobkumarsaha/wal-g-$(KUBEDB_DB):kubedb .
+
+# Multi-arch build for Mac (amd64 + arm64); reuse same Dockerfile
+.PHONY: kubedb_image_multiarch
+kubedb_image_multiarch:
+	docker buildx build \
+	  -f docker/kubedb/Dockerfile \
+	  --platform linux/amd64,linux/arm64 \
+	  --build-arg DB=$(KUBEDB_DB) \
+	  --build-arg GO_VERSION=$(KUBEDB_GO_VERSION) \
+	  --build-arg BUILD_TAGS="$(BUILD_TAGS)" \
+	  --push \
+	  -t ghcr.io/arnobkumarsaha/wal-g-$(KUBEDB_DB):kubedb .
 
 mongo_features:
 	set -e

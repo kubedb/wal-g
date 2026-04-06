@@ -41,7 +41,7 @@ else
 endif
 
 DATABASES ?= fdb gp mongo mysql pg redis sqlserver
-DB        ?= pg
+DB        ?= mongo
 
 ###
 ### These variables should not need tweaking.

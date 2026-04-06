@@ -2,8 +2,9 @@ package archive
 
 import (
 	"fmt"
-	"github.com/pkg/errors"
 	"time"
+
+	"github.com/pkg/errors"
 
 	"github.com/wal-g/tracelog"
 	"github.com/wal-g/wal-g/internal"
@@ -86,6 +87,22 @@ func SequenceBetweenTS(archives []models.Archive, since, until models.Timestamp)
 	}
 
 	return buildSequence(seqEnd, since, archives, lastTSArch)
+}
+
+func GetUpdatedBackupTimes(archives []models.Archive, since, until models.Timestamp) (models.Timestamp, models.Timestamp) {
+	var updatedSince models.Timestamp
+	for i := range archives {
+		arch := archives[i]
+		if arch.Type != models.ArchiveTypeOplog {
+			continue
+		}
+
+		if arch.In(since) {
+			updatedSince = arch.Start
+		}
+	}
+
+	return updatedSince, until
 }
 
 // BackupNamesFromBackupTimes forms list of backup names from BackupTime
