@@ -19,5 +19,6 @@ func HandleOplogReplay(ctx context.Context,
 }
 
 func RunOplogReplay(ctx context.Context, mongodbURL string, replayArgs binary.ReplyOplogConfig) error {
+	tracelog.InfoLogger.Printf("URL: %s, DBNode= %s, Since: %s, Until: %s, ", mongodbURL, replayArgs.DBNode, replayArgs.Since, replayArgs.Until)
 	return binary.RunOplogReplay(ctx, mongodbURL, replayArgs)
 }

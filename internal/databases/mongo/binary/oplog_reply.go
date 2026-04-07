@@ -2,9 +2,7 @@ package binary
 
 import (
 	"context"
-	"fmt"
 
-	"github.com/wal-g/tracelog"
 	"github.com/wal-g/wal-g/internal/databases/mongo/archive"
 	"github.com/wal-g/wal-g/internal/databases/mongo/client"
 	"github.com/wal-g/wal-g/internal/databases/mongo/models"
@@ -12,6 +10,7 @@ import (
 	"github.com/wal-g/wal-g/internal/databases/mongo/shake"
 	"github.com/wal-g/wal-g/internal/databases/mongo/stages"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/klog/v2"
 )
 
 func RunOplogReplay(ctx context.Context, mongodbURL string, replayArgs ReplyOplogConfig) error {
@@ -79,6 +78,7 @@ func RunOplogReplay(ctx context.Context, mongodbURL string, replayArgs ReplyOplo
 	// setup storage fetcher
 	oplogFetcher := stages.NewStorageFetcher(downloader, path, replayArgs.DBNode)
 
+	klog.Infof("HandleOplogReplay %v %v \n", replayArgs.Since, replayArgs.Until)
 	// run worker cycle
 	return HandleOplogReplay(ctx, replayArgs.Since, replayArgs.Until, oplogFetcher, oplogApplier)
 }
@@ -87,28 +87,13 @@ func resolveOplogReplaySequence(
 	downloader archive.Downloader,
 	since, until models.Timestamp,
 ) (archive.Sequence, error) {
-	// because of oplog archives are write every 30 second intervals, we need to expand segment
-	sinceStr := fmt.Sprintf("%s_%s", models.ArchiveTypeOplog, models.Timestamp{TS: since.TS - 300, Inc: 0}.String())
-	untilStr := fmt.Sprintf("%s_%s", models.ArchiveTypeOplog, models.Timestamp{TS: until.TS + 30, Inc: until.Inc}.String())
-
-	archives, err := downloader.ListOplogArchivesSegment(&sinceStr, &untilStr)
+	archives, err := downloader.ListOplogArchives()
 	if err != nil {
 		return nil, err
 	}
-
+	klog.Infof("GetUpdatedBackupTimes : %v %v \n", since, until)
 	since, until = archive.GetUpdatedBackupTimes(archives, since, until)
-	path, err := archive.SequenceBetweenTS(archives, since, until)
-	// if the start and end found in the archives, return the sequence
-	if err == nil {
-		return path, nil
-	}
-
-	// fallback to list all archives
-	tracelog.WarningLogger.Println("fallback to ListFolder to find the last record", err)
-	archives, err = downloader.ListOplogArchives()
-	if err != nil {
-		return nil, err
-	}
+	klog.Infof("SequenceBetweenTS : %v %v \n", since, until)
 	return archive.SequenceBetweenTS(archives, since, until)
 }
 
