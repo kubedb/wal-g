@@ -3,14 +3,16 @@ package mongo
 import (
 	"context"
 	"fmt"
+	"os"
+	"sync"
+	"time"
+
 	"github.com/go-logr/logr"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/klog/v2"
-	v1 "kubedb.dev/apimachinery/apis/kubedb/v1"
+	"kubeops.dev/sidekick/apis/apps/v1alpha1"
 	storageapi "kubestash.dev/apimachinery/apis/storage/v1alpha1"
-	"sync"
-	"time"
 
 	"github.com/robfig/cron/v3"
 	"github.com/spf13/cobra"
@@ -30,14 +32,15 @@ const (
 )
 
 type Retention struct {
-	kubeClient    *kubernetes.Clientset
-	client        runtime_client.Client
-	logger        logr.Logger
-	db            *v1.MongoDB
-	snapshot      *storageapi.Snapshot
-	archiver      *archiverv1alpha1.MongoDBArchiver
-	backupStorage *storageapi.BackupStorage
-	mu            sync.Mutex
+	kubeClient      *kubernetes.Clientset
+	client          runtime_client.Client
+	logger          logr.Logger
+	logBackupOption *archiverv1alpha1.LogBackupOptions
+	backend         *storageapi.Backend
+	snapshot        *storageapi.Snapshot
+	backupStorage   *storageapi.BackupStorage
+	mu              sync.Mutex
+	sidekick        *v1alpha1.Sidekick
 }
 
 func GetNewRetention(ctx context.Context, snapshotRef *metav1.ObjectMeta) (*Retention, error) {
@@ -48,27 +51,49 @@ func GetNewRetention(ctx context.Context, snapshotRef *metav1.ObjectMeta) (*Rete
 	if err = setClientToRetention(rt); err != nil {
 		return nil, fmt.Errorf("failed to set client to rt: %w", err)
 	}
+	podName, err := os.Hostname()
+	if err != nil {
+		return nil, err
+	}
+	rt.sidekick, err = rt.getSidekick(ctx, podName, os.Getenv("NAMESPACE"))
+	if err != nil {
+		return nil, fmt.Errorf("failed to get sidekick: %w", err)
+	}
+
 	rt.snapshot, err = rt.getSnapshot(ctx, snapshotRef)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get snapshot: %w", err)
 	}
 
-	rt.db, err = rt.getDB(ctx)
+	rt.logBackupOption, err = rt.getLogBackupOption()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get db: %w", err)
+		return nil, fmt.Errorf("failed to get logBackupOption: %w", err)
 	}
 
-	rt.archiver, err = rt.getArchiver(ctx)
+	rt.backend, err = rt.getBackend()
 	if err != nil {
-		return nil, fmt.Errorf("failed to get archiver: %w", err)
+		return nil, fmt.Errorf("failed to get backupStorage backend: %w", err)
 	}
 
-	rt.backupStorage, err = rt.getBackupStorage(ctx)
-	if err != nil {
-		return nil, fmt.Errorf("failed to get backupStorage: %w", err)
-	}
+	rt.backupStorage = rt.createBackupStorage()
 
 	return rt, nil
+}
+
+func (rt *Retention) getSidekick(ctx context.Context, sidekickname string, sidekicknamespace string) (*v1alpha1.Sidekick, error) {
+	sk := &v1alpha1.Sidekick{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      sidekickname,
+			Namespace: sidekicknamespace,
+		},
+	}
+
+	err := rt.client.Get(ctx, runtime_client.ObjectKeyFromObject(sk), sk)
+	if err != nil {
+		return nil, err
+	}
+
+	return sk, nil
 }
 
 func (rt *Retention) Run(ctx context.Context) {
@@ -95,7 +120,7 @@ func (rt *Retention) Run(ctx context.Context) {
 	}
 
 	rcron := cron.New()
-	_, err = rcron.AddFunc(rt.archiver.Spec.LogBackup.RetentionSchedule, func() {
+	_, err = rcron.AddFunc(rt.logBackupOption.RetentionSchedule, func() {
 		err := rt.runRetention(ctx)
 		if err != nil {
 			rt.logger.Error(err, "failed to run retention")
@@ -167,7 +192,7 @@ func (rt *Retention) runOplogPurgeForKubeDB(ctx context.Context, pitrAfterTime *
 		return err
 	}
 	purger.SetNodeSpecificPurger(pushArgs.dbNode)
-	count, err := mongo.HandleOplogPurgeForKubeDB(downloader, purger, pitrAfterTime, dryRun, rt.db.Name, rt.db.Namespace)
+	count, err := mongo.HandleOplogPurgeForKubeDB(downloader, purger, pitrAfterTime, dryRun)
 	klog.Infof("Deleted Count: %d", count)
 	compName := "wal"
 	compName = compName + "-" + pushArgs.dbNode
@@ -194,41 +219,50 @@ func (rt *Retention) getSnapshot(ctx context.Context, ref *metav1.ObjectMeta) (*
 	return snapshot, err
 }
 
-func (rt *Retention) getDB(ctx context.Context) (*v1.MongoDB, error) {
-	db := &v1.MongoDB{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      rt.snapshot.Spec.AppRef.Name,
-			Namespace: rt.snapshot.Spec.AppRef.Namespace,
-		},
+func (rt *Retention) getLogBackupOption() (*archiverv1alpha1.LogBackupOptions, error) {
+	extraArgs := rt.sidekick.Spec.ExtraArgs
+	var lbo archiverv1alpha1.LogBackupOptions
+	val, err := archiverv1alpha1.GetValueFromExtraArgs(extraArgs, archiverv1alpha1.ExtraArgsKeyLogBackupOpt, &lbo)
+	if err != nil {
+		return nil, err
 	}
-	err := rt.client.Get(ctx, runtime_client.ObjectKeyFromObject(db), db)
-	return db, err
+	logbackup, ok := val.(*archiverv1alpha1.LogBackupOptions)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for log backup options")
+	}
+	return logbackup, nil
 }
 
-func (rt *Retention) getArchiver(ctx context.Context) (*archiverv1alpha1.MongoDBArchiver, error) {
-	archiver := &archiverv1alpha1.MongoDBArchiver{
-		ObjectMeta: metav1.ObjectMeta{
-			Name:      rt.db.Spec.Archiver.Ref.Name,
-			Namespace: rt.db.Spec.Archiver.Ref.Namespace,
-		},
+func (rt *Retention) getBackend() (*storageapi.Backend, error) {
+	extraArgs := rt.sidekick.Spec.ExtraArgs
+	var be storageapi.Backend
+	val, err := archiverv1alpha1.GetValueFromExtraArgs(extraArgs, archiverv1alpha1.ExtraArgsKeyStorage, &be)
+	if err != nil {
+		return nil, err
 	}
-	err := rt.client.Get(ctx, runtime_client.ObjectKeyFromObject(archiver), archiver)
-	return archiver, err
+	storage, ok := val.(*storageapi.Backend)
+	if !ok {
+		return nil, fmt.Errorf("unexpected type for log backup options")
+	}
+	return storage, nil
 }
 
-func (rt *Retention) getBackupStorage(ctx context.Context) (*storageapi.BackupStorage, error) {
+func (rt *Retention) createBackupStorage() *storageapi.BackupStorage {
 	bs := &storageapi.BackupStorage{
 		ObjectMeta: metav1.ObjectMeta{
-			Name:      rt.archiver.Spec.BackupStorage.Ref.Name,
-			Namespace: rt.archiver.Spec.BackupStorage.Ref.Namespace,
+			Name:      "backupStorage",
+			Namespace: os.Getenv("NAMESPACE"),
+		},
+		Spec: storageapi.BackupStorageSpec{
+			Storage: *rt.backend,
 		},
 	}
-	err := rt.client.Get(ctx, runtime_client.ObjectKeyFromObject(bs), bs)
-	return bs, err
+
+	return bs
 }
 
 func (rt *Retention) pitrDiscoveryAfterTime() (*time.Time, error) {
-	pitrAfterTime, err := archiverv1alpha1.ParseCutoffTimeFromPeriod(rt.archiver.Spec.LogBackup.RetentionPeriod, time.Now())
+	pitrAfterTime, err := archiverv1alpha1.ParseCutoffTimeFromPeriod(rt.logBackupOption.RetentionPeriod, time.Now())
 	if err != nil {
 		return nil, err
 	}

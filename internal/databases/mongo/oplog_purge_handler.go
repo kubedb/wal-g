@@ -59,7 +59,7 @@ func HandleOplogPurge(downloader archive.Downloader, purger archive.Purger, reta
 	return nil
 }
 
-func HandleOplogPurgeForKubeDB(downloader archive.Downloader, purger archive.Purger, retainAfter *time.Time, dryRun bool, dbName string, nameamespace string) (int, error) {
+func HandleOplogPurgeForKubeDB(downloader archive.Downloader, purger archive.Purger, retainAfter *time.Time, dryRun bool) (int, error) {
 	archives, err := downloader.ListOplogArchives()
 	if err != nil {
 		return 0, fmt.Errorf("can not load oplog archives: %+v", err)
