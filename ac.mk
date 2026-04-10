@@ -61,12 +61,12 @@ IMAGE            := $(REGISTRY)/$(BIN)
 VERSION          := $(VERSION)_$(DB)
 TAG              := $(VERSION)_$(OS)_$(ARCH)
 
-GO_VERSION       ?= 1.23
+GO_VERSION       ?= 1.26
 
 # Directories that we need created to build/test.
 BUILD_DIRS  := bin/$(OS)_$(ARCH)
 
-DOCKERFILE  = Dockerfile
+DOCKERFILE  = docker/kubedb/Dockerfile
 
 # If you want to build all binaries, see the 'all-build' rule.
 # If you want to build all containers, see the 'all-container' rule.
