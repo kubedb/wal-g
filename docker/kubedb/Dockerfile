@@ -16,7 +16,7 @@
 ARG GO_VERSION=1.25.8
 ARG RUNTIME=debian:bookworm-slim
 
-FROM golang:${GO_VERSION}-bookworm AS builder
+FROM golang:{GO_VERSION}-bookworm AS builder
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64

@@ -1,6 +1,6 @@
 module github.com/wal-g/wal-g
 
-go 1.26.1
+go 1.26
 
 require (
 	cloud.google.com/go/storage v1.51.0
@@ -68,6 +68,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.3
+	k8s.io/klog/v2 v2.130.1
 	kmodules.xyz/client-go v0.34.3
 	kubedb.dev/apimachinery v0.63.1-0.20260402121059-f57d49cdeb54
 	kubestash.dev/apimachinery v0.26.1-0.20260406104729-ca5351d933aa
@@ -189,7 +190,6 @@ require (
 	k8s.io/api v0.35.3 // indirect
 	k8s.io/apiextensions-apiserver v0.34.3 // indirect
 	k8s.io/apiserver v0.34.3 // indirect
-	k8s.io/klog/v2 v2.130.1 // indirect
 	k8s.io/kube-aggregator v0.34.3 // indirect
 	k8s.io/kube-openapi v0.0.0-20250910181357-589584f1c912 // indirect
 	k8s.io/metrics v0.34.3 // indirect
