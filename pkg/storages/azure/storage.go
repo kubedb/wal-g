@@ -4,8 +4,10 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"os"
 	"time"
 
+	"github.com/Azure/azure-sdk-for-go/sdk/azcore"
 	"github.com/Azure/azure-sdk-for-go/sdk/azcore/policy"
 	"github.com/Azure/azure-sdk-for-go/sdk/azidentity"
 	"github.com/Azure/azure-sdk-for-go/sdk/storage/azblob"
@@ -154,9 +156,19 @@ func containerClientWithAccessKey(config *Config) (*container.Client, error) {
 }
 
 func containerClientWithDefaultAuth(config *Config) (*container.Client, error) {
-	defaultCredential, err := azidentity.NewDefaultAzureCredential(nil)
-	if err != nil {
-		return nil, fmt.Errorf("construct the default Azure credential chain: %w", err)
+	var credential azcore.TokenCredential
+	var err error
+
+	if os.Getenv(FederatedTokenFile) != "" {
+		if credential, err = azidentity.NewWorkloadIdentityCredential(&azidentity.WorkloadIdentityCredentialOptions{
+			EnableAzureProxy: true,
+		}); err != nil {
+			return nil, fmt.Errorf("construct workload identity credential: %w", err)
+		}
+	} else {
+		if credential, err = azidentity.NewDefaultAzureCredential(nil); err != nil {
+			return nil, fmt.Errorf("construct the default Azure credential chain: %w", err)
+		}
 	}
 
 	containerURLString := fmt.Sprintf(
@@ -170,7 +182,7 @@ func containerClientWithDefaultAuth(config *Config) (*container.Client, error) {
 		return nil, fmt.Errorf("parse service URL: %w", err)
 	}
 
-	containerClient, err := container.NewClient(containerURLString, defaultCredential, buildClientOptions(config))
+	containerClient, err := container.NewClient(containerURLString, credential, buildClientOptions(config))
 	return containerClient, err
 }
 
