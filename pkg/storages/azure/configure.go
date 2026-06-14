@@ -19,6 +19,7 @@ const (
 	BuffersSetting      = "AZURE_MAX_BUFFERS"
 	TryTimeoutSetting   = "AZURE_TRY_TIMEOUT"
 	BlobStoreAPIVersion = "AZURE_BLOB_STORE_API_VERSION"
+	FederatedTokenFile  = "AZURE_FEDERATED_TOKEN_FILE"
 )
 
 // SettingList provides a list of GCS folder settings.
