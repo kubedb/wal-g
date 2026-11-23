@@ -45,7 +45,13 @@ func (folder *Folder) ListFolder() (objects []storage.Object, subFolders []stora
 			subPath := path.Join(folder.subPath, fileInfo.Name()) + "/"
 			subFolders = append(subFolders, NewFolder(folder.rootPath, subPath))
 		} else {
-			info, _ := fileInfo.Info()
+			info, err := fileInfo.Info()
+			if os.IsNotExist(err) {
+				continue
+			}
+			if err != nil {
+				return nil, nil, fmt.Errorf("unable to stat %q in FS folder %q: %w", fileInfo.Name(), dirPath, err)
+			}
 			objects = append(objects, storage.NewLocalObject(fileInfo.Name(), info.ModTime(), info.Size()))
 		}
 	}
