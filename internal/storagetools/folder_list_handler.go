@@ -1,6 +1,7 @@
 package storagetools
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"os"
@@ -67,7 +68,7 @@ func (ld *ListDirectory) Type() ListElementType {
 	return Directory
 }
 
-func HandleFolderList(folder storage.Folder, recursive bool) error {
+func listFolderElements(folder storage.Folder, recursive bool) ([]ListElement, error) {
 	var list []ListElement
 	var folderObjects []storage.Object
 	var err error
@@ -82,11 +83,19 @@ func HandleFolderList(folder storage.Folder, recursive bool) error {
 		}
 	}
 	if err != nil {
-		return fmt.Errorf("list folder: %v", err)
+		return nil, fmt.Errorf("list folder: %v", err)
 	}
 
 	for i := range folderObjects {
 		list = append(list, NewListObject(folderObjects[i]))
+	}
+	return list, nil
+}
+
+func HandleFolderList(folder storage.Folder, recursive bool) error {
+	list, err := listFolderElements(folder, recursive)
+	if err != nil {
+		return err
 	}
 
 	err = WriteObjectsList(list, os.Stdout)
@@ -133,6 +142,79 @@ func HandleFolderListWithGlob(folder storage.Folder, pattern string, recursive b
 			return err
 		}
 		fmt.Println()
+	}
+	return nil
+}
+
+type listElementJSON struct {
+	Type           ListElementType `json:"type"`
+	Name           string          `json:"name"`
+	Modified       string          `json:"modified,omitempty"`
+	Size           int64           `json:"size"`
+	VersionID      string          `json:"version_id,omitempty"`
+	AdditionalInfo string          `json:"additional_info,omitempty"`
+}
+
+func listElementsJSON(objects []ListElement, prefix string) []listElementJSON {
+	out := make([]listElementJSON, 0, len(objects))
+	for _, o := range objects {
+		e := listElementJSON{
+			Type:           o.Type(),
+			Name:           prefix + o.GetName(),
+			Size:           o.GetSize(),
+			VersionID:      o.GetVersionID(),
+			AdditionalInfo: o.GetAdditionalInfo(),
+		}
+		if t := o.GetLastModified(); !t.IsZero() {
+			e.Modified = t.UTC().Format(time.RFC3339Nano)
+		}
+		out = append(out, e)
+	}
+	return out
+}
+
+func WriteObjectsListJSON(objects []ListElement, output io.Writer) error {
+	return json.NewEncoder(output).Encode(listElementsJSON(objects, ""))
+}
+
+func HandleFolderListJSON(folder storage.Folder, recursive bool) error {
+	return writeFolderListJSON(folder, recursive, os.Stdout)
+}
+
+func writeFolderListJSON(folder storage.Folder, recursive bool, output io.Writer) error {
+	list, err := listFolderElements(folder, recursive)
+	if err != nil {
+		return err
+	}
+	if err := WriteObjectsListJSON(list, output); err != nil {
+		return fmt.Errorf("write folder listing: %v", err)
+	}
+	return nil
+}
+
+func HandleFolderListWithGlobJSON(folder storage.Folder, pattern string, recursive bool) error {
+	return writeFolderListWithGlobJSON(folder, pattern, recursive, os.Stdout)
+}
+
+func writeFolderListWithGlobJSON(folder storage.Folder, pattern string, recursive bool, output io.Writer) error {
+	_, folderPaths, err := storage.Glob(folder, pattern)
+	if err != nil {
+		return err
+	}
+	all := []listElementJSON{}
+	for _, folderPath := range folderPaths {
+		list, err := listFolderElements(folder.GetSubFolder(folderPath), recursive)
+		if err != nil {
+			return err
+		}
+		prefix := strings.TrimPrefix(folderPath, "/")
+		if prefix != "" && !strings.HasSuffix(prefix, "/") {
+			prefix += "/"
+		}
+		all = append(all, listElementsJSON(list, prefix)...)
+	}
+	if err := json.NewEncoder(output).Encode(all); err != nil {
+		return fmt.Errorf("write folder listing: %v", err)
 	}
 	return nil
 }
